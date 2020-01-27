@@ -1,0 +1,76 @@
+root_path: day-night-simple
+checkpoints_dir: checkpoints
+name: cycle_tri_gan_64f
+model: cycle_tri_gan
+trainable: True
+continue_train: False
+verbose: False
+print_freq: 10
+display_freq: 10
+load_iter: 1000
+gpu_ids:
+  - 0
+
+load_size: 256
+epoch_count: 50
+batch_size: 1
+
+
+lr_policy: linear
+lr: 0.0002
+beta_1: 0.5
+
+dsc_model: BasePatchDiscriminator
+dsc_layers: 3
+dsc_channels: 64
+dsc_scales:
+  - 1
+  - 4
+  - 8
+  - 16
+  - 32
+dsc_dropout: 0.1
+dsc_activ: gelu
+dsc_norm: instance
+dsc_padding: reflection
+
+
+num_downsamples: 2
+dil_channels: 64
+
+enc_model: AggregatedLargeDilationEncoder
+enc_channels: 64
+enc_dropout: 0.1
+enc_activ: gelu
+enc_norm: instance
+enc_padding: reflection
+enc_dilations:
+  - 1
+  - 2
+  - 3
+
+
+dec_model: AggregatedLargeDilationDecoder
+dec_channels: 64
+dec_dropout: 0.1
+dec_activ: gelu
+dec_norm: instance
+dec_padding: reflection
+dec_dilations:
+  - 1
+  - 2
+  - 3
+
+lambda_A: 30
+lambda_B: 30
+lambda_idn: 20
+lambda_aux: 70
+adversarial_objective: mse
+reconstruction_objective: L2
+target_real_label: 0.9
+target_fake_label: 0.1
+
+init_type: normal
+init_gain: 0.02
+bias: 0.0
+
