@@ -6,7 +6,7 @@ from gan_loss import *
 from training_utils import *
 from basic_model import *
 from basic_modules import *
-from torch.nn.utils import clip_grad_norm
+from torch.nn.utils import clip_grad_norm_
 import importlib
 
 
@@ -211,18 +211,18 @@ class CycleTriGAN(BaseModel):
         self.set_requires_grad([self.discriminator_A, self.discriminator_B], False)
         self.optimizer_generator.zero_grad()
         self.backward_generator()
-        self.gnorm_decoder_rgb_A = clip_grad_norm(self.decoder_rgb_A.parameters(), self.opt.max_gnorm)
-        self.gnorm_decoder_rgb_B = clip_grad_norm(self.decoder_rgb_B.parameters(), self.opt.max_gnorm)
-        self.gnorm_decoder_seg_A = clip_grad_norm(self.decoder_seg_A.parameters(), self.opt.max_gnorm)
-        self.gnorm_decoder_seg_B = clip_grad_norm(self.decoder_seg_B.parameters(), self.opt.max_gnorm)
-        self.gnorm_encoder_A = clip_grad_norm(self.encoder_A.parameters(), self.opt.max_gnorm)
-        self.gnorm_encoder_B = clip_grad_norm(self.encoder_B.parameters(), self.opt.max_gnorm)
+        self.gnorm_decoder_rgb_A = clip_grad_norm_(self.decoder_rgb_A.parameters(), self.opt.max_gnorm)
+        self.gnorm_decoder_rgb_B = clip_grad_norm_(self.decoder_rgb_B.parameters(), self.opt.max_gnorm)
+        self.gnorm_decoder_seg_A = clip_grad_norm_(self.decoder_seg_A.parameters(), self.opt.max_gnorm)
+        self.gnorm_decoder_seg_B = clip_grad_norm_(self.decoder_seg_B.parameters(), self.opt.max_gnorm)
+        self.gnorm_encoder_A = clip_grad_norm_(self.encoder_A.parameters(), self.opt.max_gnorm)
+        self.gnorm_encoder_B = clip_grad_norm_(self.encoder_B.parameters(), self.opt.max_gnorm)
         self.optimizer_generator.step()
 
         self.set_requires_grad([self.discriminator_A, self.discriminator_B], True)
         self.optimizer_discriminator.zero_grad()
         self.backward_discriminator_A()
         self.backward_discriminator_B()
-        self.gnorm_discriminator_A = clip_grad_norm(self.discriminator_A.parameters(), self.opt.max_gnorm)
-        self.gnorm_discriminator_B = clip_grad_norm(self.discriminator_B.parameters(), self.opt.max_gnorm)
+        self.gnorm_discriminator_A = clip_grad_norm_(self.discriminator_A.parameters(), self.opt.max_gnorm)
+        self.gnorm_discriminator_B = clip_grad_norm_(self.discriminator_B.parameters(), self.opt.max_gnorm)
         self.optimizer_discriminator.step()
