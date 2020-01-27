@@ -6,6 +6,7 @@ from gan_loss import *
 from training_utils import *
 from basic_model import *
 from basic_modules import *
+from torch.nn.utils import clip_grad_norm
 import importlib
 
 
@@ -57,7 +58,7 @@ class CycleTriGAN(BaseModel):
             'cycle_B',
             'identity_B',
         ]
-        # self.opt = opt
+        self.opt = opt
         self.lambda_A = opt.lambda_A
         self.lambda_B = opt.lambda_B
         self.lambda_idn = opt.lambda_idn
@@ -210,6 +211,12 @@ class CycleTriGAN(BaseModel):
         self.set_requires_grad([self.discriminator_A, self.discriminator_B], False)
         self.optimizer_generator.zero_grad()
         self.backward_generator()
+        self.decoder_rgb_A = clip_grad_norm(self.decoder_rgb_A.parameters(), self.opt.max_gnorm)
+        self.decoder_rgb_B = clip_grad_norm(self.decoder_rgb_B.parameters(), self.opt.max_gnorm)
+        self.decoder_seg_A = clip_grad_norm(self.decoder_seg_A.parameters(), self.opt.max_gnorm)
+        self.decoder_seg_B = clip_grad_norm(self.decoder_seg_B.parameters(), self.opt.max_gnorm)
+        self.encoder_A = clip_grad_norm(self.encoder_A.parameters(), self.opt.max_gnorm)
+        self.encoder_B = clip_grad_norm(self.encoder_B.parameters(), self.opt.max_gnorm)
         self.optimizer_generator.step()
 
         self.set_requires_grad([self.discriminator_A, self.discriminator_B], True)
