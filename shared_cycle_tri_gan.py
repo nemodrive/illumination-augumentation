@@ -6,281 +6,41 @@ from gan_loss import *
 from training_utils import *
 from basic_model import *
 from basic_modules import *
+from torch.nn.utils import clip_grad_norm_
+import importlib
 
 
-class Discriminator(nn.Module):
-    def __init__(self, opt, in_channels):
-        super(Discriminator, self).__init__()
-        self.dil_channels = opt.dil_channels
-        self.dsc_channels = opt.dsc_channels
-        self.dsc_layers = opt.dsc_layers
-        self.dsc_scales = opt.dsc_scales
-        self.in_channels = in_channels
-        self.opt = opt
-        self._build_layers()
-
-    def _build_layers(self):
-        self.heads = []
-        self.modules = []
-        self._init = [nn.Conv2d(in_channels=3,
-                                out_channels=self.dsc_channels,
-                                kernel_size=7,
-                                stride=1,
-                                padding=3)]
-        for i in range(self.dsc_layers):
-            self.modules = self.modules + [MultiDilatedConv(in_channels=self.dsc_channels * (2 ** i),
-                                                            d_channels=self.dil_channels * (2 ** i),
-                                                            out_channels=self.dsc_channels * (2 ** i),
-                                                            dilations=[1, 3, 5])]
-            self.modules = self.modules + [DownSampleConv(in_channels=self.dsc_channels * (2 ** i),
-                                                          out_channels=self.dsc_channels * (2 ** (i + 1)))]
-
-        self.modules = self._init + self.modules
-        self.conv_block = nn.Sequential(*self.modules)
-
-        size = int(self.opt.load_size // (2 ** self.dsc_layers)) + 1
-        # possible scales = [1, 8, 16, 24, 32]
-        for scale in self.dsc_scales:
-            self.heads = self.heads + [nn.Conv2d(in_channels=self.dsc_channels * (2 ** self.dsc_layers),
-                                                 out_channels=1,
-                                                 kernel_size=size - scale,
-                                                 padding=0,
-                                                 stride=1)]
-        self.heads = nn.ModuleList(self.heads)
-
-    def forward(self, input):
-        outputs = []
-        x = self.conv_block(input)
-        for scale_head in self.heads:
-            outputs = outputs + [scale_head(x)]
-        return outputs
+def get_encoder_model(model_name):
+    model_file = 'encoders'
+    model_lib = importlib.import_module(model_file)
+    model = None
+    model_class = model_name
+    for name, cls in model_lib.__dict__.items():
+        if name.lower() == model_class.lower() and issubclass(cls, nn.Module):
+            model = cls
+    return model
 
 
-class Encoder(nn.Module):
-    def __init__(self, opt):
-        super(Encoder, self).__init__()
-        self.enc_channels = opt.enc_channels
-        self.low_channels = opt.low_channels
-        self.dil_channels = opt.dil_channels
-        self.num_downsamples = opt.num_downsamples
-        self.dropout = opt.dropout
-        self.num_stacks = opt.num_stack
-        self.model = self._build_layers()
-
-    def _build_layers(self):
-        self.modules = []
-        self._init = [nn.Conv2d(in_channels=3,
-                                out_channels=self.low_channels,
-                                kernel_size=7,
-                                stride=1,
-                                padding=3),
-                      nn.InstanceNorm2d(self.low_channels),
-                      nn.GELU()]
-        for i in range(self.num_downsamples):
-            self.modules = self.modules + [MultiDilatedConv(in_channels=self.low_channels * (2 ** i),
-                                                            d_channels=self.dil_channels * (2 ** i),
-                                                            out_channels=self.low_channels * (2 ** i),
-                                                            dilations=[1, 2, 3],
-                                                            dropout=self.dropout)]
-            self.modules = self.modules + [DownSampleConv(in_channels=self.low_channels * (2 ** i),
-                                                          out_channels=self.low_channels * (2 ** (i + 1)))]
-        for i in range(self.num_stacks):
-            self.modules = self.modules + [ResidualConv(num_channels=self.dil_channels * (2 ** self.num_downsamples),
-                                                        num_convs=3,
-                                                        dropout=self.dropout)]
-            self.modules = self.modules + [MultiDilatedConv(in_channels=self.dil_channels * (2 ** self.num_downsamples),
-                                                            d_channels=self.dil_channels * (2 ** self.num_downsamples),
-                                                            out_channels=self.dil_channels * (
-                                                                    2 ** self.num_downsamples),
-                                                            dilations=[1, 2, 3, 5, 7],
-                                                            dropout=self.dropout)]
-        self.modules = self._init + self.modules
-        model = nn.Sequential(*self.modules)
-        return model
-
-    def forward(self, input):
-        x = self.model(input)
-        return x
+def get_decoder_model(model_name):
+    model_file = 'decoders'
+    model_lib = importlib.import_module(model_file)
+    model = None
+    model_class = model_name
+    for name, cls in model_lib.__dict__.items():
+        if name.lower() == model_class.lower() and issubclass(cls, nn.Module):
+            model = cls
+    return model
 
 
-class DownSamplingEncoder(nn.Module):
-    def __init__(self, opt):
-        super(DownSamplingEncoder, self).__init__()
-        self.enc_channels = opt.enc_channels
-        self.low_channels = opt.low_channels
-        self.dil_channels = opt.dil_channels
-        self.num_downsamples = opt.num_downsamples
-        self.dropout = opt.dropout
-        self.model = self._build_layers()
-
-    def _build_layers(self):
-        self.modules = []
-        self._init = [nn.Conv2d(in_channels=3,
-                                out_channels=self.low_channels,
-                                kernel_size=7,
-                                stride=1,
-                                padding=3),
-                      nn.InstanceNorm2d(self.low_channels),
-                      nn.GELU()]
-        for i in range(self.num_downsamples):
-            self.modules = self.modules + [MultiDilatedConv(in_channels=self.low_channels * (2 ** i),
-                                                            d_channels=self.dil_channels * (2 ** i),
-                                                            out_channels=self.low_channels * (2 ** i),
-                                                            dilations=[1, 2, 3],
-                                                            dropout=self.dropout)]
-            self.modules = self.modules + [DownSampleConv(in_channels=self.low_channels * (2 ** i),
-                                                          out_channels=self.low_channels * (2 ** (i + 1)))]
-        self.modules = self._init + self.modules
-        model = nn.Sequential(*self.modules)
-        return model
-
-    def forward(self, input):
-        x = self.model(input)
-        return x
-
-
-class MultiDilationStack(nn.Module):
-    def __init__(self, opt):
-        super(MultiDilationStack, self).__init__()
-        self.enc_channels = opt.enc_channels
-        self.low_channels = opt.low_channels
-        self.dil_channels = opt.dil_channels
-        self.num_downsamples = opt.num_downsamples
-        self.dropout = opt.dropout
-        self.num_stacks = opt.num_stack
-        self.model = self._build_layers()
-
-    def _build_layers(self):
-        self.modules = []
-        self._init = [nn.Conv2d(in_channels=3,
-                                out_channels=self.low_channels,
-                                kernel_size=7,
-                                stride=1,
-                                padding=3),
-                      nn.InstanceNorm2d(self.low_channels),
-                      nn.GELU()]
-
-        for i in range(self.num_stacks):
-            self.modules = self.modules + [ResidualConv(num_channels=self.dil_channels * (2 ** self.num_downsamples),
-                                                        num_convs=3,
-                                                        dropout=self.dropout)]
-            self.modules = self.modules + [MultiDilatedConv(in_channels=self.dil_channels * (2 ** self.num_downsamples),
-                                                            d_channels=self.dil_channels * (2 ** self.num_downsamples),
-                                                            out_channels=self.dil_channels * (
-                                                                    2 ** self.num_downsamples),
-                                                            dilations=[1, 2, 3, 5, 7],
-                                                            dropout=self.dropout)]
-        self.modules = self._init + self.modules
-        model = nn.Sequential(*self.modules)
-        return model
-
-    def forward(self, input):
-        x = self.model(input)
-        return x
-
-
-class UpsamplingDecoder(nn.Module):
-    def __init__(self, opt):
-        super(UpsamplingDecoder, self).__init__()
-        self.dec_channels = opt.dec_channels
-        self.dil_channels = opt.dil_channels
-        self.num_downsamples = opt.num_downsamples
-        self.num_upsamples = int(opt.num_downsamples // 2)
-        self.droptpout = opt.dropout
-        self.model = self._build_layers()
-
-    def _build_layers(self):
-        self.modules = []
-        self.modules = self.modules + [UpSampleConv(in_channels=self.dil_channels * (2 ** self.num_downsamples),
-                                                    out_channels=self.dec_channels * (2 ** self.num_downsamples))]
-        for i in range(self.num_upsamples, 0, -1):
-            self.modules = self.modules + [ResidualConv(num_channels=self.dec_channels * (2 ** i),
-                                                        num_convs=3,
-                                                        dropout=self.dropout)]
-            self.modules = self.modules + [UpSampleConv(in_channels=self.dec_channels * (2 ** i),
-                                                        out_channels=self.dec_channels * (2 ** (i - 1))
-                                                        )]
-        return nn.Sequential(*self.modules)
-
-    def forward(self, input):
-        return self.model(input)
-
-
-class ColoringDecoder(nn.Module):
-    def __init__(self, opt, out_channels):
-        super(ColoringDecoder, self).__init__()
-        self.dec_channels = opt.dec_channels
-        self.dil_channels = opt.dil_channels
-        self.out_channels = out_channels
-        self.num_upsamples = int(opt.num_downsamples // 2)
-        self.dropout = opt.dropout
-        self.model = self._build_layers()
-
-    def _build_layers(self):
-        self.modules = []
-        for i in range(self.num_upsamples, 0, -1):
-            self.modules = self.modules + [ResidualConv(num_channels=self.dec_channels * (2 ** i),
-                                                        num_convs=5,
-                                                        dropout=self.dropout)]
-            self.modules = self.modules + [UpSampleConv(in_channels=self.dec_channels * (2 ** i),
-                                                        out_channels=self.dec_channels * (2 ** (i - 1))
-                                                        )]
-        self.modules = self.modules + [nn.Conv2d(in_channels=self.dec_channels * 2,
-                                                 out_channels=self.dec_channels,
-                                                 kernel_size=3,
-                                                 padding=1, ),
-                                       nn.InstanceNorm2d(self.dec_channels),
-                                       nn.GELU()]
-
-        self.modules = self.modules + [nn.ReflectionPad2d(3)]
-        self.modules = self.modules + [nn.Conv2d(in_channels=self.dec_channels,
-                                                 out_channels=self.out_channels,
-                                                 kernel_size=7,
-                                                 padding=0)]
-        self.modules = self.modules + [nn.Tanh()]
-        return nn.Sequential(*self.modules)
-
-
-class Decoder(nn.Module):
-    def __init__(self, opt, out_channels):
-        super(Decoder, self).__init__()
-        self.enc_channels = opt.enc_channels
-        self.dil_channels = opt.dil_channels
-        self.dec_channels = opt.dec_channels
-        self.num_upsamples = opt.num_downsamples
-        self.out_channels = out_channels
-        self.dropout = opt.dropout
-        self.model = self._build_layers()
-
-    def _build_layers(self):
-        self.modules = []
-        self.modules = self.modules + [UpSampleConv(in_channels=self.dil_channels * (2 ** self.num_upsamples),
-                                                    out_channels=self.dec_channels * (2 ** self.num_upsamples))]
-
-        for i in range(self.num_upsamples, 1, -1):
-            self.modules = self.modules + [ResidualConv(num_channels=self.dec_channels * (2 ** i),
-                                                        num_convs=3,
-                                                        dropout=self.dropout)]
-            self.modules = self.modules + [UpSampleConv(in_channels=self.dec_channels * (2 ** i),
-                                                        out_channels=self.dec_channels * (2 ** (i - 1))
-                                                        )]
-        self.modules = self.modules + [nn.Conv2d(in_channels=self.dec_channels * 2,
-                                                 out_channels=self.dec_channels,
-                                                 kernel_size=3,
-                                                 padding=1, ),
-                                       nn.InstanceNorm2d(self.dec_channels),
-                                       nn.GELU()]
-
-        self.modules = self.modules + [nn.ReflectionPad2d(3)]
-        self.modules = self.modules + [nn.Conv2d(in_channels=self.dec_channels,
-                                                 out_channels=self.out_channels,
-                                                 kernel_size=7,
-                                                 padding=0)]
-        self.modules = self.modules + [nn.Tanh()]
-        return nn.Sequential(*self.modules)
-
-    def forward(self, input):
-        return self.model(input)
+def get_discriminator_model(model_name):
+    model_file = 'discriminators'
+    model_lib = importlib.import_module(model_file)
+    model = None
+    model_class = model_name
+    for name, cls in model_lib.__dict__.items():
+        if name.lower() == model_class.lower() and issubclass(cls, nn.Module):
+            model = cls
+    return model
 
 
 class CycleTriGAN(BaseModel):
@@ -297,9 +57,20 @@ class CycleTriGAN(BaseModel):
             'decoder_seg_B',
             'cycle_B',
             'identity_B',
-
         ]
-        # self.opt = opt
+
+        self.gradient_norm_names = [
+            'decoder_rgb_A',
+            'decoder_rgb_B',
+            'decoder_seg_A',
+            'decoder_seg_B',
+            'discriminator_A',
+            'discriminator_B',
+            'encoder_A',
+            'encoder_B'
+        ]
+
+        self.opt = opt
         self.lambda_A = opt.lambda_A
         self.lambda_B = opt.lambda_B
         self.lambda_idn = opt.lambda_idn
@@ -310,7 +81,6 @@ class CycleTriGAN(BaseModel):
         visual_names_B = ['real_B', 'fake_A', 'rec_B', 'identity_B', 'gt_seg_B', 'seg_B']
         self.visual_names = visual_names_A + visual_names_B
 
-        self.norm = get_norm(opt.norm)
         if self.trainable:
             self.model_names = ['encoder_A',
                                 'encoder_B',
@@ -329,39 +99,68 @@ class CycleTriGAN(BaseModel):
                                 'decoder_seg_B']
 
         self.networks = []
-        self.decoder_rgb_A = ColoringDecoder(self.opt, 3)
-        self.decoder_rgb_B = ColoringDecoder(self.opt, 3)
-        self.decoder_rgb_S = ColoringDecoder(self.opt, 20)
-        self.decoder_shared = UpsamplingDecoder(self.opt)
-        self.encoder_A = DownSamplingEncoder(self.opt)
-        self.encoder_B = DownSamplingEncoder(self.opt)
-        self.encoder_shared = MultiDilationStack(self.opt)
-        self.networks = self.networks + [self.decoder_rgb_A, self.decoder_rgb_B, self.decoder_rgb_S, self.decoder_shared,
-                                         self.encoder_A, self.encoder_B, self.encoder_shared]
+        decoder_model = get_decoder_model(opt.dec_model)
+        encoder_model = get_encoder_model(opt.enc_model)
+        discriminator_model = get_discriminator_model(opt.dsc_model)
+
+        # currently modular code only allows for encoder and decoder
+        # models that do not alter the 2D shape of the feature_blocks
+        shared_encoder_model = get_encoder_model(opt.s_enc_model)
+        shared_decoder_model = get_encoder_model(opt.s_dec_model)
+
+        latent_space_size = (2 ** opt.num_downsamples) * opt.enc_channels
+
+
+        #self.shared_encoder = ResidualConv(num_channels=
+        #                                   )
+
+        self.decoder_rgb_A = decoder_model(opt, 3)
+        self.decoder_rgb_B = decoder_model(opt, 3)
+
+        if opt.share_segmentation:
+            self.decoder_seg_A = decoder_model(opt, 20)
+            self.decoder_seg_B = decoder_model(opt, 20)
+        else:
+            segmentation_decoder = decoder_model(opt, 20)
+            self.decoder_seg_A = segmentation_decoder
+            self.decoder_seg_B = segmentation_decoder
+
+        self.encoder_A = encoder_model(opt)
+        self.encoder_B = encoder_model(opt)
+        self.networks = self.networks + [self.decoder_rgb_A, self.decoder_rgb_B, self.decoder_seg_A, self.decoder_seg_B,
+                                         self.encoder_A, self.encoder_B, self.shared_encoder, self.shared_decoder]
+
+        # refference for gradient clipping
+        self.generative_networks = self.networks
+
+        self.fake_pool_A = DiscriminativePool(opt)
+        self.fake_pool_B = DiscriminativePool(opt)
 
         if self.trainable:
-            self.discriminator_A = Discriminator(self.opt, 3)
-            self.discriminator_B = Discriminator(self.opt, 3)
+            self.discriminator_A = discriminator_model(opt)
+            self.discriminator_B = discriminator_model(opt)
             self.networks = self.networks + [self.discriminator_A, self.discriminator_B]
 
         for i in range(len(self.networks)):
             self.networks[i] = init_model(self.networks[i], opt.init_type, opt.init_gain, opt.bias, self.gpu_ids)
 
-        self.adversarial_objective = Objective(mode=opt.objective_type, target_real_label=opt.target_real_label,
-                                               target_fake_label=opt.target_fake_label).to(self.device)
-        self.cycle_objective = nn.MSELoss().to(self.device)
-        self.identity_objective = nn.MSELoss().to(self.device)
-        self.aux_objective = nn.BCEWithLogitsLoss().to(self.device)
+        self.adversarial_objective = AdversarialObjective(mode=opt.adversarial_objective,
+                                                          target_real_label=opt.target_real_label,
+                                                          target_fake_label=opt.target_fake_label).to(self.device)
+        self.cycle_objective = ReconstructionObjective(opt.reconstruction_objective).to(self.device)
+        self.identity_objective = ReconstructionObjective(opt.reconstruction_objective).to(self.device)
+        self.aux_objective = nn.BCELoss().to(self.device)
 
         self.optimizer_generator = torch.optim.Adam(
             itertools.chain(
                 self.encoder_A.parameters(),
                 self.encoder_B.parameters(),
-                self.encoder_shared.parameters(),
-                self.decoder_shared.parameters(),
-                self.decoder_rgb_S.parameters(),
+                self.shared_encoder.parameters(),
                 self.decoder_rgb_A.parameters(),
-                self.decoder_rgb_B.parameters()
+                self.decoder_rgb_B.parameters(),
+                self.shared_decoder.parameters(),
+                self.decoder_seg_A.parameters(),
+                self.decoder_seg_B.parameters()
             ),
             lr=opt.lr,
             betas=(opt.beta_1, 0.999)
@@ -387,19 +186,38 @@ class CycleTriGAN(BaseModel):
         self.gt_seg_B = self.segmentation_model(self.real_B)
 
     def forward(self):
-        self.e_A = self.encoder_shared(self.encoder_A(self.real_A))
-        self.e_B = self.encoder_shared(self.encoder_B(self.real_B))
-        self.d_A = self.decoder_shared(self.e_A)
-        self.d_B = self.decoder_shared(self.e_B)
-        self.fake_A = self.decoder_rgb_A(self.d_B)
-        self.fake_B = self.decoder_rgb_B(self.d_A)
-        self.seg_A = self.decoder_rgb_S(self.d_A)
-        self.seg_B = self.decoder_rgb_S(self.d_B)
+        # fake image generation
+        self.e_A = self.encoder_A(self.real_A)
+        self.e_B = self.encoder_B(self.real_B)
+        # passing both E_A(A) and E_B(B) to obtain Z_A and Z_B
+        self.z_A = self.shared_encoder(self.e_A)
+        self.z_B = self.shared_encoder(self.e_B)
+        # using the shared decoder to obtain DZ_A and DZ_B
+        self.dz_A = self.shared_decoder(self.z_A)
+        self.dz_B = self.shared_decoder(self.z_B)
+        # decoding the latent representaitons with inversed "shallow level" decoders
+        self.fake_A = self.decoder_rgb_A(self.dz_B)
+        self.fake_B = self.decoder_rgb_B(self.dz_A)
 
-        self.rec_e_A = self.encoder_shared(self.encoder_B(self.fake_B))
-        self.rec_A = self.decoder_rgb_A(self.decoder_shared(self.rec_e_A))
-        self.rec_e_B = self.encoder_shared(self.encoder_A(self.fake_A))
-        self.rec_B = self.decoder_rgb_B(self.decoder_shared(self.rec_e_B))
+        self.fake_pool_A.add_to_pool(self.fake_A)
+        self.fake_pool_B.add_to_pool(self.fake_B)
+
+        self.seg_A = self.decoder_seg_A(self.z_A)
+        self.seg_B = self.decoder_seg_B(self.z_B)
+
+        self.fake_e_B = self.encoder_B(self.fake_B)
+        self.fake_e_A = self.encoder_A(self.fake_A)
+
+        self.fake_z_B = self.shared_encoder(self.fake_e_B)
+        self.fake_z_A = self.shared_encoder(self.fake_e_A)
+
+        # ideally passing fake_z_B to the shared decoder should result
+        # in a feature map very close to E_A(A)
+        self.rec_dz_A = self.shared_decoder(self.fake_z_B)
+        self.rec_dz_B = self.shared_decoder(self.fake_z_A)
+
+        self.rec_A = self.decoder_rgb_A(self.rec_dz_A)
+        self.rec_B = self.decoder_rgb_B(self.rec_dz_B)
 
     def backward_D(self, discriminator, real, fake):
         pred_real = discriminator(real)
@@ -414,17 +232,17 @@ class CycleTriGAN(BaseModel):
         return loss_D
 
     def backward_discriminator_A(self):
-        fake_A = self.fake_A
+        fake_A = self.fake_pool_A.fetch_candidates()
         self.loss_discriminator_A = self.backward_D(self.discriminator_A, self.real_A, fake_A)
 
     def backward_discriminator_B(self):
-        fake_B = self.fake_B
+        fake_B = self.fake_pool_B.fetch_candidates()
         self.loss_discriminator_B = self.backward_D(self.discriminator_B, self.real_B, fake_B)
 
     def backward_generator(self):
         if self.lambda_idn > 0:
-            self.identity_A = self.decoder_rgb_A(self.d_A)
-            self.identity_B = self.decoder_rgb_B(self.d_B)
+            self.identity_A = self.decoder_rgb_A(self.dz_A)
+            self.identity_B = self.decoder_rgb_B(self.dz_B)
             self.loss_identity_A = self.identity_objective(self.identity_A,
                                                            self.real_A) * self.lambda_A * self.lambda_idn
             self.loss_identity_B = self.identity_objective(self.identity_B,
@@ -441,8 +259,8 @@ class CycleTriGAN(BaseModel):
             self.loss_decoder_rgb_A += self.adversarial_objective(pred_A, True)
         self.loss_cycle_A = self.cycle_objective(self.rec_A, self.real_A) * self.lambda_A
         self.loss_cycle_B = self.cycle_objective(self.rec_B, self.real_B) * self.lambda_B
-        self.loss_decoder_seg_A = self.aux_objective(F.softmax(self.seg_A), self.gt_seg_A) * self.lambda_aux
-        self.loss_decoder_seg_B = self.aux_objective(F.softmax(self.seg_B), self.gt_seg_B) * self.lambda_aux
+        self.loss_decoder_seg_A = self.aux_objective(F.sigmoid(self.seg_A), self.gt_seg_A) * self.lambda_aux
+        self.loss_decoder_seg_B = self.aux_objective(F.sigmoid(self.seg_B), self.gt_seg_B) * self.lambda_aux
         self.loss = self.loss_decoder_rgb_A + self.loss_decoder_rgb_B + \
                     self.loss_decoder_seg_A + self.loss_decoder_seg_B + \
                     self.loss_cycle_A + self.loss_cycle_B + \
@@ -454,10 +272,26 @@ class CycleTriGAN(BaseModel):
         self.set_requires_grad([self.discriminator_A, self.discriminator_B], False)
         self.optimizer_generator.zero_grad()
         self.backward_generator()
+
+        #for network in self.generative_networks:
+        #    gnorm_network = clip_grad_norm_(network.parameters(), self.opt.gen_max_gnorm)
+
+        # needs to be refactored
+        self.gnorm_decoder_rgb_A = clip_grad_norm_(self.decoder_rgb_A.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_decoder_rgb_B = clip_grad_norm_(self.decoder_rgb_B.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_decoder_seg_A = clip_grad_norm_(self.decoder_seg_A.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_decoder_seg_B = clip_grad_norm_(self.decoder_seg_B.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_encoder_A = clip_grad_norm_(self.encoder_A.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_encoder_B = clip_grad_norm_(self.encoder_B.parameters(), self.opt.gen_max_gnorm)
+
         self.optimizer_generator.step()
 
         self.set_requires_grad([self.discriminator_A, self.discriminator_B], True)
         self.optimizer_discriminator.zero_grad()
         self.backward_discriminator_A()
         self.backward_discriminator_B()
+
+        # needs to be refactored
+        self.gnorm_discriminator_A = clip_grad_norm_(self.discriminator_A.parameters(), self.opt.dsc_max_gnorm)
+        self.gnorm_discriminator_B = clip_grad_norm_(self.discriminator_B.parameters(), self.opt.dsc_max_gnorm)
         self.optimizer_discriminator.step()

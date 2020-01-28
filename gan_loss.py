@@ -26,9 +26,6 @@ class AdversarialObjective(nn.Module):
 
     def __call__(self, prediction, target_is_real):
         target_tensor = self.get_target_tensor(prediction, target_is_real)
-        if self.mode == 'bce':
-            # if probabilities are expected as output, run predictions through a Sigmoid
-            prediction = F.sigmoid(prediction)
         loss = self.loss(prediction, target_tensor)
         return loss
 

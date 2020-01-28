@@ -88,11 +88,38 @@ class DownSampleConv(nn.Module):
         return x
 
 
+class SquashConv(nn.Module):
+    def __init__(self, in_channels, out_channels, activ='gelu', norm='instance'):
+        super().__init__()
+        self.in_channels = in_channels
+        self._out_channels = out_channels
+        self.activ_layer = get_activ(activ)
+        self.norm_layer = get_norm(type)
+        self._build_layers()
+
+    def _build_layers(self):
+        self._layers = [
+            nn.Conv2d(in_channels=self.in_channels,
+                      out_channels=self.out_channels,
+                      kernel_size=1,
+                      padding=0),
+            self.norm_layer(self.out_channels),
+            self.activ_layer()
+        ]
+        self._layers = nn.ModuleList(self._layer)
+
+    def forward(self, input):
+        x = input
+        for layer in self._layers:
+            x = layer(x)
+        return x
+
+
 class ResidualConv(nn.Module):
     def __init__(self, num_channels, num_blocks, dropout=0., activ='gelu', norm='instance', padding='reflection'):
         super().__init__()
-        self.num_channels = num_channels
         self.num_blocks = num_blocks
+        self.num_channels = num_channels
         self.norm_layer = get_norm(norm)
         self.activ_layer = get_activ(activ)
         self.padding_layer = get_padding(padding)
@@ -101,9 +128,9 @@ class ResidualConv(nn.Module):
 
     def _build_layers(self):
         self._layers = []
-        for _ in range(self.num_convs):
-            self.conv_layer = nn.Conv2d(in_channels=self.num_channels,
-                                        out_channels=self.num_channels,
+        for _ in range(self.num_blocks):
+            self.conv_layer = nn.Conv2d(in_channels=self.out_channels,
+                                        out_channels=self.out_channels,
                                         kernel_size=3,
                                         stride=1,
                                         )

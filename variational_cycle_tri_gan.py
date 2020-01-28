@@ -112,7 +112,7 @@ class CycleTriGAN(BaseModel):
                                                           target_fake_label=opt.target_fake_label).to(self.device)
         self.cycle_objective = ReconstructionObjective(opt.reconstruction_objective).to(self.device)
         self.identity_objective = ReconstructionObjective(opt.reconstruction_objective).to(self.device)
-        self.aux_objective = nn.BCEWithLogitsLoss().to(self.device)
+        self.aux_objective = nn.BCELoss().to(self.device)
 
         self.optimizer_generator = torch.optim.Adam(
             itertools.chain(

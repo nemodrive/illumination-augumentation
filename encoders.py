@@ -101,8 +101,8 @@ class BaseDilationEncoder(nn.Module):
         self._layers = nn.Sequential(*self._layers)
 
     def forward(self, input):
-        #x = input
-        #for layer in self._layers:
+        # x = input
+        # for layer in self._layers:
         #    x = layer(x)
         x = self._layers(input)
         return x
@@ -142,7 +142,7 @@ class AggregatedLargeDilationEncoder(nn.Module):
         prev_factor = 1
         for i in range(self.num_downsamples):
             factor = factor * 2
-            #dilating before downsampling
+            # dilating before downsampling
             self._layers = self._layers + [MultiDilatedConv(in_channels=self.enc_channels * prev_factor,
                                                             out_channels=self.enc_channels * prev_factor,
                                                             dil_channels=self.dil_channels * prev_factor,
@@ -176,7 +176,62 @@ class AggregatedLargeDilationEncoder(nn.Module):
         self._layers = nn.ModuleList(self._layers)
 
     def forward(self, input):
-        #x = self._layers(input)
+        # x = self._layers(input)
+        x = input
+        for layer in self._layers:
+            x = layer(x)
+        return x
+
+
+class ScalingResidualEncoder(nn.Module):
+    def __init__(self, in_channels, out_channels, opt):
+        super(ScalingResidualEncoder, self).__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.dilations = opt.enc_dilations
+        self.padding_layer = get_padding(opt.enc_padding)
+        self.activ_layer = get_activ(opt.enc_activ)
+        self.norm_layer = get_norm(opt.enc_norm)
+        self.p_dropout = opt.enc_dropout
+        self._build_layers(opt)
+
+    def _build_layers(self, opt):
+        self._layers = []
+        if self.in_channels < self.out_channels:
+            self.conv_layer = nn.Conv2d(in_channels=self.in_channels,
+                                        out_channels=self.out_channels,
+                                        kernel_size=3,
+                                        stride=1,
+                                        )
+            self._layers = self._layers + [
+                self.padding_layer(1),
+                self.conv_layer,
+                self.norm_layer(self.out_channels),
+                self.activ_layer(),
+            ]
+        self._layers = self._layers + [ResidualConv(num_channels=self.out_channels,
+                                                    num_blocks=opt.latent_blocks,
+                                                    dropout=opt.latent_dropout,
+                                                    activ=opt.latent_activ,
+                                                    norm=opt.latent_norm,
+                                                    padding=opt.laten_padding)
+                                       ]
+        if self.in_channels > self.out_channels:
+            self.conv_layer = nn.Conv2d(in_channels=self.out_channels,
+                                        out_channels=self.in_channels,
+                                        kernel_size=3,
+                                        stride=1,
+                                        )
+            self._layers = self._layers + [
+                self.padding_layer(1),
+                self.conv_layer,
+                self.norm_layer(self.out_channels),
+                self.activ_layer(),
+            ]
+        self._layers = nn.ModuleList(self._layers)
+
+    def forward(self, input):
+        # x = self._layers(input)
         x = input
         for layer in self._layers:
             x = layer(x)

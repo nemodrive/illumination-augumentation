@@ -5,7 +5,7 @@ from basic_modules import *
 
 
 class BaseDecoder(nn.Module):
-    def __init__(self, opt, out_channels):
+    def __init__(self, opt, out_channels, type='continous'):
         super(BaseDecoder, self).__init__()
         self.out_channels = out_channels
         self.enc_channels = opt.enc_channels
@@ -15,8 +15,11 @@ class BaseDecoder(nn.Module):
         self.norm_layer = get_norm(opt.dec_norm)
         self.activ_layer = get_activ(opt.dec_activ)
         self.padding_layer = get_padding(opt.dec_padding)
-        # print(self.padding_layer)
         self.p_dropout = opt.dec_dropout
+        if type == 'continous':
+            self.activ_final = nn.Tanh()
+        if type == 'probabilities':
+            self.activ_final = nn.Sigmoid()
         self._build_layers(opt)
 
     def _build_layers(self, opt):
@@ -52,7 +55,7 @@ class BaseDecoder(nn.Module):
                 out_channels=self.out_channels,
                 kernel_size=7,
                 stride=1),
-            nn.Tanh()
+            self.activ_final
         ]
 
         self._layers = self._layers + self._final_layer
@@ -67,7 +70,7 @@ class BaseDecoder(nn.Module):
 
 
 class BaseDilationDecoder(nn.Module):
-    def __init__(self, opt, out_channels):
+    def __init__(self, opt, out_channels, type='continous'):
         super(BaseDilationDecoder, self).__init__()
         self.out_channels = out_channels
         self.enc_channels = opt.enc_channels
@@ -79,6 +82,10 @@ class BaseDilationDecoder(nn.Module):
         self.activ_layer = get_activ(opt.dec_activ)
         self.padding_layer = get_padding(opt.dec_padding)
         self.p_dropout = opt.dec_dropout
+        if type == 'continous':
+            self.activ_final = nn.Tanh()
+        if type == 'probabilities':
+            self.activ_final = nn.Sigmoid()
         self._build_layers(opt)
 
     def _build_layers(self, opt):
@@ -125,7 +132,7 @@ class BaseDilationDecoder(nn.Module):
                 kernel_size=7,
                 padding=0,
                 stride=1),
-            nn.Tanh()
+            self.activ_final
         ]
 
         self._layers = self._layers + self._final_layer
@@ -140,7 +147,7 @@ class BaseDilationDecoder(nn.Module):
 
 
 class AggregatedLargeDilationDecoder(nn.Module):
-    def __init__(self, opt, out_channels):
+    def __init__(self, opt, out_channels, type='continous'):
         super(AggregatedLargeDilationDecoder, self).__init__()
         self.out_channels = out_channels
         self.enc_channels = opt.enc_channels
@@ -154,6 +161,10 @@ class AggregatedLargeDilationDecoder(nn.Module):
         # these are layer constructors, not implicit layers
         self.norm_layer = get_norm(opt.dec_norm)
         self.activ_layer = get_activ(opt.dec_activ)
+        if type == 'continous':
+            self.activ_final = nn.Tanh()
+        if type == 'probabilities':
+            self.activ_final = nn.Sigmoid()
         self.padding_layer = get_padding(opt.dec_padding)
         self.p_dropout = opt.dec_dropout
         self._build_layers(opt)
@@ -195,6 +206,7 @@ class AggregatedLargeDilationDecoder(nn.Module):
                                                             residual=False)]
             prev_factor = factor
 
+
         self._final_layer = [
             self.padding_layer(3),
             nn.Conv2d(
@@ -202,7 +214,7 @@ class AggregatedLargeDilationDecoder(nn.Module):
                 out_channels=self.out_channels,
                 kernel_size=7,
                 stride=1),
-            nn.Tanh()
+            self.activ_final
         ]
 
         self._layers = self._layers + self._final_layer

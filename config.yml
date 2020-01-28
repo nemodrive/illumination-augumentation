@@ -1,6 +1,6 @@
 root_path: day-night-simple
 checkpoints_dir: checkpoints
-name: cycle_tri_gan_shared_segmentation_decoder64f
+name: cycle_tri_gan_shared_segmentation_decoder_fixed
 model: cycle_tri_gan_shared_segmentation_decoder
 trainable: True
 continue_train: False
