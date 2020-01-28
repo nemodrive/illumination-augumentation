@@ -58,6 +58,18 @@ class CycleTriGAN(BaseModel):
             'cycle_B',
             'identity_B',
         ]
+
+        self.gradient_norm_names = [
+            'decoder_rgb_A',
+            'decoder_rgb_B',
+            'decoder_seg_A',
+            'decoder_seg_B',
+            'discriminator_A',
+            'discriminator_B',
+            'encoder_A',
+            'encoder_B'
+        ]
+
         self.opt = opt
         self.lambda_A = opt.lambda_A
         self.lambda_B = opt.lambda_B
@@ -96,10 +108,14 @@ class CycleTriGAN(BaseModel):
         self.decoder_seg_B = decoder_model(opt, 20)
         self.encoder_A = encoder_model(opt)
         self.encoder_B = encoder_model(opt)
-        print(self.encoder_A)
-        print(self.decoder_rgb_A)
         self.networks = self.networks + [self.decoder_rgb_A, self.decoder_rgb_B, self.decoder_seg_A, self.decoder_seg_B,
                                          self.encoder_A, self.encoder_B]
+
+        # refference for gradient clipping
+        self.generative_networks = self.networks
+
+        self.fake_pool_A = DiscriminativePool(opt)
+        self.fake_pool_B = DiscriminativePool(opt)
 
         if self.trainable:
             self.discriminator_A = discriminator_model(opt)
@@ -153,6 +169,10 @@ class CycleTriGAN(BaseModel):
         self.e_B = self.encoder_B(self.real_B)
         self.fake_A = self.decoder_rgb_A(self.e_B)
         self.fake_B = self.decoder_rgb_B(self.e_A)
+
+        self.fake_pool_A.add_to_pool(self.fake_A)
+        self.fake_pool_B.add_to_pool(self.fake_B)
+
         self.seg_A = self.decoder_seg_A(self.e_A)
         self.seg_B = self.decoder_seg_B(self.e_B)
         self.rec_A = self.decoder_rgb_A(self.encoder_B(self.fake_B))
@@ -171,11 +191,11 @@ class CycleTriGAN(BaseModel):
         return loss_D
 
     def backward_discriminator_A(self):
-        fake_A = self.fake_A
+        fake_A = self.fake_pool_A.fetch_candidates()
         self.loss_discriminator_A = self.backward_D(self.discriminator_A, self.real_A, fake_A)
 
     def backward_discriminator_B(self):
-        fake_B = self.fake_B
+        fake_B = self.fake_pool_B.fetch_candidates()
         self.loss_discriminator_B = self.backward_D(self.discriminator_B, self.real_B, fake_B)
 
     def backward_generator(self):
@@ -211,18 +231,26 @@ class CycleTriGAN(BaseModel):
         self.set_requires_grad([self.discriminator_A, self.discriminator_B], False)
         self.optimizer_generator.zero_grad()
         self.backward_generator()
-        self.gnorm_decoder_rgb_A = clip_grad_norm_(self.decoder_rgb_A.parameters(), self.opt.max_gnorm)
-        self.gnorm_decoder_rgb_B = clip_grad_norm_(self.decoder_rgb_B.parameters(), self.opt.max_gnorm)
-        self.gnorm_decoder_seg_A = clip_grad_norm_(self.decoder_seg_A.parameters(), self.opt.max_gnorm)
-        self.gnorm_decoder_seg_B = clip_grad_norm_(self.decoder_seg_B.parameters(), self.opt.max_gnorm)
-        self.gnorm_encoder_A = clip_grad_norm_(self.encoder_A.parameters(), self.opt.max_gnorm)
-        self.gnorm_encoder_B = clip_grad_norm_(self.encoder_B.parameters(), self.opt.max_gnorm)
+
+        #for network in self.generative_networks:
+        #    gnorm_network = clip_grad_norm_(network.parameters(), self.opt.gen_max_gnorm)
+
+        # needs to be refactored
+        self.gnorm_decoder_rgb_A = clip_grad_norm_(self.decoder_rgb_A.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_decoder_rgb_B = clip_grad_norm_(self.decoder_rgb_B.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_decoder_seg_A = clip_grad_norm_(self.decoder_seg_A.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_decoder_seg_B = clip_grad_norm_(self.decoder_seg_B.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_encoder_A = clip_grad_norm_(self.encoder_A.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_encoder_B = clip_grad_norm_(self.encoder_B.parameters(), self.opt.gen_max_gnorm)
+
         self.optimizer_generator.step()
 
         self.set_requires_grad([self.discriminator_A, self.discriminator_B], True)
         self.optimizer_discriminator.zero_grad()
         self.backward_discriminator_A()
         self.backward_discriminator_B()
-        self.gnorm_discriminator_A = clip_grad_norm_(self.discriminator_A.parameters(), self.opt.max_gnorm)
-        self.gnorm_discriminator_B = clip_grad_norm_(self.discriminator_B.parameters(), self.opt.max_gnorm)
+
+        # needs to be refactored
+        self.gnorm_discriminator_A = clip_grad_norm_(self.discriminator_A.parameters(), self.opt.dsc_max_gnorm)
+        self.gnorm_discriminator_B = clip_grad_norm_(self.discriminator_B.parameters(), self.opt.dsc_max_gnorm)
         self.optimizer_discriminator.step()

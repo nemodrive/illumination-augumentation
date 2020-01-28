@@ -38,9 +38,6 @@ if __name__ == '__main__':
     with open('config.yml', 'r') as cfg_file:
         opt = yaml.load(cfg_file)
         opt = Namespace(**opt)
-
-    print(opt.gpu_ids)
-
     model = create_model(opt, segment_network)
     dataset = UnpairedDataset(opt.root_path, opt.load_size)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch_size, num_workers=8)
@@ -60,7 +57,6 @@ if __name__ == '__main__':
             iter_start_time = time.time()
             if total_iters % opt.print_freq == 0:
                 time_data = iter_start_time - iter_data_time
-
             total_iters = total_iters + opt.batch_size
             epoch_iters = epoch_iters + opt.batch_size
             model.set_input(data)
@@ -72,8 +68,10 @@ if __name__ == '__main__':
 
             if total_iters % opt.print_freq == 0:
                 losses = model.get_current_losses()
+                gnorms = model.get_current_gradient_norms()
                 time_compute = (time.time() - iter_start_time) / opt.batch_size
                 visualizer.write_scalars('Loss', losses, total_iters)
+                visualizer.write_scalars('Gradient Norms', gnorms, total_iters)
 
             iter_data_time = time.time()
 

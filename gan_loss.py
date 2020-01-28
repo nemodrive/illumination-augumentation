@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import random
+
+
 
 class AdversarialObjective(nn.Module):
     def __init__(self, mode, target_real_label=1.0, target_fake_label=0.0):
@@ -40,3 +43,31 @@ class ReconstructionObjective(nn.Module):
 
     def __call__(self, prediction, target):
         return self.loss(prediction, target)
+
+
+class DiscriminativePool():
+    def __init__(self, opt):
+        self.images = []
+        self.max_size = opt.pool_max_size
+        self.add_prob = opt.pool_add_prob
+        self.size = 0
+
+    def add_to_pool(self, images):
+        for image in images:
+            image = torch.unsqueeze(image.data, 0)
+            # if our buffer has not reached max capacity yet
+            if self.size < self.max_size:
+                self.size = self.size + 1
+                self.images = self.images + [image]
+            else:
+                p = random.uniform(0, 1)
+                # if rolled probability is high enough an old image is swapped with
+                # a freshly generated one
+                if p > 1 - self.add_prob:
+                    swap_idx = random.randint(0, self.max_size - 1)
+                    self.images[swap_idx] = image
+
+    def fetch_candidates(self):
+        # create batch of images
+        test_images = torch.cat(self.images, 0)
+        return test_images

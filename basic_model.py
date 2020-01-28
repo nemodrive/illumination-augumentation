@@ -25,6 +25,7 @@ class BaseModel(ABC):
         self.visual_names = []
         self.optimizers = []
         self.image_paths = []
+        self.gradient_norm_names = []
         self.metric = 0
 
     @abstractmethod
@@ -82,11 +83,17 @@ class BaseModel(ABC):
 
     def get_current_losses(self):
         errors_ret = OrderedDict()
-        print(self.loss_names)
         for name in self.loss_names:
             if isinstance(name, str):
                 errors_ret[name] = float(getattr(self, 'loss_' + name))
         return errors_ret
+
+    def get_current_gradient_norms(self):
+        gnorms_ret = OrderedDict()
+        for name in self.gradient_norm_names:
+            if isinstance(name, str):
+                gnorms_ret[name] = float(getattr(self, 'gnorm_' + name))
+        return gnorms_ret
 
     def save_networks(self, epoch):
         for name in self.model_names:

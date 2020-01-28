@@ -9,6 +9,11 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+day-night-simple/
+checkpoints/
+pretrained_models/
+drive_augumentation/
+runs/
 develop-eggs/
 dist/
 downloads/
