@@ -1,7 +1,7 @@
 root_path: day-night-simple
 checkpoints_dir: checkpoints
-name: cycle_tri_gan_64f
-model: cycle_tri_gan
+name: cycle_tri_gan_shared_segmentation_decoder64f
+model: cycle_tri_gan_shared_segmentation_decoder
 trainable: True
 continue_train: False
 verbose: False
@@ -67,7 +67,9 @@ dec_dilations:
 lambda_A: 30
 lambda_B: 30
 lambda_idn: 20
-lambda_aux: 70
+lambda_aux: 7
+lambda_aux_A: 20
+lambda_aux_B: 10
 adversarial_objective: mse
 reconstruction_objective: L2
 target_real_label: 0.9
