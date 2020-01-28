@@ -74,7 +74,7 @@ adversarial_objective: mse
 reconstruction_objective: L2
 target_real_label: 0.9
 target_fake_label: 0.1
-pool_max_size: 50
+pool_max_size: 30
 pool_add_prob: 0.7
 
 init_type: normal

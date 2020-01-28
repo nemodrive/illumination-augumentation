@@ -180,8 +180,8 @@ class CycleTriGAN(BaseModel):
         self.segmentation_model = segmentation_model.to(self.device)
 
     def set_input(self, input):
-        self.real_A = input['rgb_A'].to(self.device)
-        self.real_B = input['rgb_B'].to(self.device)
+        self.real_A = input['rgb_A'].to(self.device).detach()
+        self.real_B = input['rgb_B'].to(self.device).detach()
         self.gt_seg_A = self.segmentation_model(self.real_A)
         self.gt_seg_B = self.segmentation_model(self.real_B)
 

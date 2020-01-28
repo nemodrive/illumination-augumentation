@@ -207,6 +207,7 @@ class AggregatedLargeDilationDecoder(nn.Module):
             prev_factor = factor
 
 
+        print(self.activ_final)
         self._final_layer = [
             self.padding_layer(3),
             nn.Conv2d(

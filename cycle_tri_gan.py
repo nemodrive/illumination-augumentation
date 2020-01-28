@@ -161,8 +161,8 @@ class CycleTriGAN(BaseModel):
     def set_input(self, input):
         self.real_A = input['rgb_A'].to(self.device)
         self.real_B = input['rgb_B'].to(self.device)
-        self.gt_seg_A = self.segmentation_model(self.real_A)
-        self.gt_seg_B = self.segmentation_model(self.real_B)
+        self.gt_seg_A = self.segmentation_model(self.real_A).detach()
+        self.gt_seg_B = self.segmentation_model(self.real_B).detach()
 
     def forward(self):
         self.e_A = self.encoder_A(self.real_A)
