@@ -188,11 +188,10 @@ class ScalingResidualEncoder(nn.Module):
         super(ScalingResidualEncoder, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.dilations = opt.enc_dilations
-        self.padding_layer = get_padding(opt.enc_padding)
-        self.activ_layer = get_activ(opt.enc_activ)
-        self.norm_layer = get_norm(opt.enc_norm)
-        self.p_dropout = opt.enc_dropout
+        self.padding_layer = get_padding(opt.latent_padding)
+        self.activ_layer = get_activ(opt.latent_activ)
+        self.norm_layer = get_norm(opt.latent_norm)
+        self.p_dropout = opt.latent_dropout
         self._build_layers(opt)
 
     def _build_layers(self, opt):

@@ -110,25 +110,21 @@ class CycleTriGAN(BaseModel):
 
         latent_space_size = (2 ** opt.num_downsamples) * opt.enc_channels
 
+        self.encoder_shared = shared_encoder_model(in_channels=latent_space_size,
+                                                   out_channels=latent_space_size * 2,
+                                                   opt=opt)
+        self.decoder_shared = shared_encoder_model(in_channels=latent_space_size * 2,
+                                                   out_channels=latent_space_size,
+                                                   opt=opt)
 
-        #self.shared_encoder = ResidualConv(num_channels=
-        #                                   )
-
-        self.decoder_rgb_A = decoder_model(opt, 3)
-        self.decoder_rgb_B = decoder_model(opt, 3)
-
-        if opt.share_segmentation:
-            self.decoder_seg_A = decoder_model(opt, 20)
-            self.decoder_seg_B = decoder_model(opt, 20)
-        else:
-            segmentation_decoder = decoder_model(opt, 20)
-            self.decoder_seg_A = segmentation_decoder
-            self.decoder_seg_B = segmentation_decoder
+        self.decoder_rgb_A = decoder_model(opt, 3, type='continous')
+        self.decoder_rgb_B = decoder_model(opt, 3, type='continous')
+        self.decoder_seg = decoder_model(opt, 20, type='probabilities')
 
         self.encoder_A = encoder_model(opt)
         self.encoder_B = encoder_model(opt)
-        self.networks = self.networks + [self.decoder_rgb_A, self.decoder_rgb_B, self.decoder_seg_A, self.decoder_seg_B,
-                                         self.encoder_A, self.encoder_B, self.shared_encoder, self.shared_decoder]
+        self.networks = self.networks + [self.decoder_rgb_A, self.decoder_rgb_B, self.decoder_seg,
+                                         self.encoder_A, self.encoder_B, self.encoder_shared, self.decoder_shared]
 
         # refference for gradient clipping
         self.generative_networks = self.networks
@@ -155,12 +151,11 @@ class CycleTriGAN(BaseModel):
             itertools.chain(
                 self.encoder_A.parameters(),
                 self.encoder_B.parameters(),
-                self.shared_encoder.parameters(),
+                self.encoder_shared.parameters(),
                 self.decoder_rgb_A.parameters(),
                 self.decoder_rgb_B.parameters(),
-                self.shared_decoder.parameters(),
-                self.decoder_seg_A.parameters(),
-                self.decoder_seg_B.parameters()
+                self.decoder_shared.parameters(),
+                self.decoder_seg.parameters(),
             ),
             lr=opt.lr,
             betas=(opt.beta_1, 0.999)
@@ -180,21 +175,21 @@ class CycleTriGAN(BaseModel):
         self.segmentation_model = segmentation_model.to(self.device)
 
     def set_input(self, input):
-        self.real_A = input['rgb_A'].to(self.device).detach()
-        self.real_B = input['rgb_B'].to(self.device).detach()
-        self.gt_seg_A = self.segmentation_model(self.real_A)
-        self.gt_seg_B = self.segmentation_model(self.real_B)
+        self.real_A = input['rgb_A'].to(self.device)
+        self.real_B = input['rgb_B'].to(self.device)
+        self.gt_seg_A = self.segmentation_model(self.real_A).detach()
+        self.gt_seg_B = self.segmentation_model(self.real_B).detach()
 
     def forward(self):
         # fake image generation
         self.e_A = self.encoder_A(self.real_A)
         self.e_B = self.encoder_B(self.real_B)
         # passing both E_A(A) and E_B(B) to obtain Z_A and Z_B
-        self.z_A = self.shared_encoder(self.e_A)
-        self.z_B = self.shared_encoder(self.e_B)
+        self.z_A = self.encoder_shared(self.e_A)
+        self.z_B = self.encoder_shared(self.e_B)
         # using the shared decoder to obtain DZ_A and DZ_B
-        self.dz_A = self.shared_decoder(self.z_A)
-        self.dz_B = self.shared_decoder(self.z_B)
+        self.dz_A = self.decoder_shared(self.z_A)
+        self.dz_B = self.decoder_shared(self.z_B)
         # decoding the latent representaitons with inversed "shallow level" decoders
         self.fake_A = self.decoder_rgb_A(self.dz_B)
         self.fake_B = self.decoder_rgb_B(self.dz_A)
@@ -202,19 +197,19 @@ class CycleTriGAN(BaseModel):
         self.fake_pool_A.add_to_pool(self.fake_A)
         self.fake_pool_B.add_to_pool(self.fake_B)
 
-        self.seg_A = self.decoder_seg_A(self.z_A)
-        self.seg_B = self.decoder_seg_B(self.z_B)
+        self.seg_A = self.decoder_seg(self.z_A)
+        self.seg_B = self.decoder_seg(self.z_B)
 
         self.fake_e_B = self.encoder_B(self.fake_B)
         self.fake_e_A = self.encoder_A(self.fake_A)
 
-        self.fake_z_B = self.shared_encoder(self.fake_e_B)
-        self.fake_z_A = self.shared_encoder(self.fake_e_A)
+        self.fake_z_B = self.encoder_shared(self.fake_e_B)
+        self.fake_z_A = self.encoder_shared(self.fake_e_A)
 
         # ideally passing fake_z_B to the shared decoder should result
         # in a feature map very close to E_A(A)
-        self.rec_dz_A = self.shared_decoder(self.fake_z_B)
-        self.rec_dz_B = self.shared_decoder(self.fake_z_A)
+        self.rec_dz_A = self.decoder_shared(self.fake_z_B)
+        self.rec_dz_B = self.decoder_shared(self.fake_z_A)
 
         self.rec_A = self.decoder_rgb_A(self.rec_dz_A)
         self.rec_B = self.decoder_rgb_B(self.rec_dz_B)
@@ -259,8 +254,8 @@ class CycleTriGAN(BaseModel):
             self.loss_decoder_rgb_A += self.adversarial_objective(pred_A, True)
         self.loss_cycle_A = self.cycle_objective(self.rec_A, self.real_A) * self.lambda_A
         self.loss_cycle_B = self.cycle_objective(self.rec_B, self.real_B) * self.lambda_B
-        self.loss_decoder_seg_A = self.aux_objective(F.sigmoid(self.seg_A), self.gt_seg_A) * self.lambda_aux
-        self.loss_decoder_seg_B = self.aux_objective(F.sigmoid(self.seg_B), self.gt_seg_B) * self.lambda_aux
+        self.loss_decoder_seg_A = self.aux_objective(self.seg_A, self.gt_seg_A) * self.lambda_aux
+        self.loss_decoder_seg_B = self.aux_objective(self.seg_B, self.gt_seg_B) * self.lambda_aux
         self.loss = self.loss_decoder_rgb_A + self.loss_decoder_rgb_B + \
                     self.loss_decoder_seg_A + self.loss_decoder_seg_B + \
                     self.loss_cycle_A + self.loss_cycle_B + \
@@ -273,16 +268,17 @@ class CycleTriGAN(BaseModel):
         self.optimizer_generator.zero_grad()
         self.backward_generator()
 
-        #for network in self.generative_networks:
+        # for network in self.generative_networks:
         #    gnorm_network = clip_grad_norm_(network.parameters(), self.opt.gen_max_gnorm)
 
         # needs to be refactored
         self.gnorm_decoder_rgb_A = clip_grad_norm_(self.decoder_rgb_A.parameters(), self.opt.gen_max_gnorm)
         self.gnorm_decoder_rgb_B = clip_grad_norm_(self.decoder_rgb_B.parameters(), self.opt.gen_max_gnorm)
-        self.gnorm_decoder_seg_A = clip_grad_norm_(self.decoder_seg_A.parameters(), self.opt.gen_max_gnorm)
-        self.gnorm_decoder_seg_B = clip_grad_norm_(self.decoder_seg_B.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_decoder_seg = clip_grad_norm_(self.decoder_seg.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_decoder_shared = clip_grad_norm_(self.decoder_shared.parameters(), self.opt.gen_max_gnorm)
         self.gnorm_encoder_A = clip_grad_norm_(self.encoder_A.parameters(), self.opt.gen_max_gnorm)
         self.gnorm_encoder_B = clip_grad_norm_(self.encoder_B.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_encoder_shared = clip_grad_norm_(self.encoder_shared.parameters(), self.opt.gen_max_gnorm)
 
         self.optimizer_generator.step()
 
