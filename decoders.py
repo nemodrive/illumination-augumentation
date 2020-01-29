@@ -75,6 +75,7 @@ class BaseDilationDecoder(nn.Module):
         self.out_channels = out_channels
         self.enc_channels = opt.enc_channels
         self.dec_channels = opt.dec_channels
+        self.dil_channels = opt.dil_channels
         self.num_upsamples = opt.num_downsamples
         self.dilations = opt.dec_dilations
         # these are layer constructors, not implicit layers
@@ -228,3 +229,34 @@ class AggregatedLargeDilationDecoder(nn.Module):
             x = layer(x)
         return x
         #return self._layers(x)
+
+
+class ResidualsIntoDilationDecoder(nn.Module):
+    def __init__(self, in_channels, out_channels, opt, type='continous'):
+        super(ResidualsIntoDilationDecoder, self).__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.opt = opt
+        self._build_layers(type)
+
+    def _build_layers(self, type):
+        self._layers = []
+        dilation_model = BaseDilationDecoder(self.opt,
+                                             out_channels=self.out_channels,
+                                             type=type)
+        residual_model = ScalingResidualBlock(in_channels=self.in_channels,
+                                              out_channels=int(self.in_channels // 2),
+                                              num_blocks=self.opt.latent_blocks,
+                                              num_layers=self.opt.latent_layers,
+                                              opt=self.opt)
+        self._layers = self._layers + [residual_model, dilation_model]
+        self._layers = nn.ModuleList(self._layers)
+
+    def forward(self, input):
+        x = input
+        for layer in self._layers:
+            x = layer(x)
+        return x
+
+    def get_output_channels(self):
+        return self.output_size

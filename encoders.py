@@ -41,6 +41,7 @@ class BaseEncoder(nn.Module):
                                                           )]
             prev_factor = factor
 
+        self.output_size = self.enc_channels * factor
         self._layers = nn.ModuleList(self._layers)
 
     def forward(self, input):
@@ -48,6 +49,9 @@ class BaseEncoder(nn.Module):
         for layer in self._layers:
             x = layer(x)
         return x
+
+    def get_output_channels(self):
+        return self.output_size
 
 
 class BaseDilationEncoder(nn.Module):
@@ -57,7 +61,7 @@ class BaseDilationEncoder(nn.Module):
         self.num_downsamples = opt.num_downsamples
         self.dilations = opt.enc_dilations
         self.dil_channels = opt.dil_channels
-        self.padding_layer = get_padding(opt.enc_padding)()
+        self.padding_layer = get_padding(opt.enc_padding)
         self.activ_layer = get_activ(opt.enc_activ)
         self.norm_layer = get_norm(opt.enc_norm)
         self.p_dropout = opt.enc_dropout
@@ -98,6 +102,7 @@ class BaseDilationEncoder(nn.Module):
                                                           )]
             prev_factor = factor
 
+        self.output_size = self.enc_channels * factor
         self._layers = nn.Sequential(*self._layers)
 
     def forward(self, input):
@@ -106,6 +111,9 @@ class BaseDilationEncoder(nn.Module):
         #    x = layer(x)
         x = self._layers(input)
         return x
+
+    def get_output_channels(self):
+        return self.output_size
 
 
 class AggregatedLargeDilationEncoder(nn.Module):
@@ -174,6 +182,7 @@ class AggregatedLargeDilationEncoder(nn.Module):
                                                         padding=opt.enc_padding,
                                                         residual=True)]
         self._layers = nn.ModuleList(self._layers)
+        self.output_size = self.enc_channels * factor
 
     def forward(self, input):
         # x = self._layers(input)
@@ -182,56 +191,34 @@ class AggregatedLargeDilationEncoder(nn.Module):
             x = layer(x)
         return x
 
+    def get_output_channels(self):
+        return self.output_size
 
-class ScalingResidualEncoder(nn.Module):
-    def __init__(self, in_channels, out_channels, opt):
-        super(ScalingResidualEncoder, self).__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.padding_layer = get_padding(opt.latent_padding)
-        self.activ_layer = get_activ(opt.latent_activ)
-        self.norm_layer = get_norm(opt.latent_norm)
-        self.p_dropout = opt.latent_dropout
-        self._build_layers(opt)
 
-    def _build_layers(self, opt):
+class DilationIntoResidualsEncoder(nn.Module):
+    def __init__(self, opt):
+        super(DilationIntoResidualsEncoder, self).__init__()
+        self.opt = opt
+        self._build_layers()
+
+    def _build_layers(self):
         self._layers = []
-        if self.in_channels < self.out_channels:
-            self.conv_layer = nn.Conv2d(in_channels=self.in_channels,
-                                        out_channels=self.out_channels,
-                                        kernel_size=3,
-                                        stride=1,
-                                        )
-            self._layers = self._layers + [
-                self.padding_layer(1),
-                self.conv_layer,
-                self.norm_layer(self.out_channels),
-                self.activ_layer(),
-            ]
-        self._layers = self._layers + [ResidualConv(num_channels=self.out_channels,
-                                                    num_blocks=opt.latent_blocks,
-                                                    dropout=opt.latent_dropout,
-                                                    activ=opt.latent_activ,
-                                                    norm=opt.latent_norm,
-                                                    padding=opt.laten_padding)
-                                       ]
-        if self.in_channels > self.out_channels:
-            self.conv_layer = nn.Conv2d(in_channels=self.out_channels,
-                                        out_channels=self.in_channels,
-                                        kernel_size=3,
-                                        stride=1,
-                                        )
-            self._layers = self._layers + [
-                self.padding_layer(1),
-                self.conv_layer,
-                self.norm_layer(self.out_channels),
-                self.activ_layer(),
-            ]
+        dilation_model = BaseDilationEncoder(self.opt)
+        dilation_model_out_channels = dilation_model.get_output_channels()
+        residual_model = ScalingResidualBlock(in_channels=dilation_model_out_channels,
+                                              out_channels=dilation_model_out_channels * 2,
+                                              num_blocks=self.opt.latent_blocks,
+                                              num_layers=self.opt.latent_layers,
+                                              opt=self.opt)
+        self.output_size = dilation_model_out_channels * 2
+        self._layers = self._layers + [dilation_model, residual_model]
         self._layers = nn.ModuleList(self._layers)
 
     def forward(self, input):
-        # x = self._layers(input)
         x = input
         for layer in self._layers:
             x = layer(x)
         return x
+
+    def get_output_channels(self):
+        return self.output_size

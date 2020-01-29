@@ -27,10 +27,9 @@ dsc_model: BasePatchDiscriminator
 dsc_layers: 3
 dsc_channels: 64
 dsc_scales:
-  - 1
-  - 4
-  - 8
+  - 20
   - 16
+  - 24
   - 32
 dsc_dropout: 0.1
 dsc_activ: gelu
@@ -41,7 +40,16 @@ dsc_padding: reflection
 num_downsamples: 2
 dil_channels: 64
 
-enc_model: AggregatedLargeDilationEncoder
+latent_blocks: 1
+latent_layers: 2
+
+latent_channels: 64
+latent_dropout: 0.1
+latent_activ: gelu
+latent_norm: instance
+latent_padding: reflection
+
+enc_model: DilationIntoResidualsEncoder
 enc_channels: 64
 enc_dropout: 0.1
 enc_activ: gelu
@@ -53,7 +61,7 @@ enc_dilations:
   - 3
 
 
-dec_model: AggregatedLargeDilationDecoder
+dec_model: ResidualsIntoDilationDecoder
 dec_channels: 64
 dec_dropout: 0.1
 dec_activ: gelu
@@ -64,11 +72,11 @@ dec_dilations:
   - 2
   - 3
 
-lambda_A: 30
-lambda_B: 30
+lambda_A: 50
+lambda_B: 50
 lambda_idn: 20
 lambda_aux: 7
-lambda_aux_A: 20
+lambda_aux_A: 30
 lambda_aux_B: 10
 adversarial_objective: mse
 reconstruction_objective: L2

@@ -102,13 +102,17 @@ class CycleTriGANSharedSegmentationDecoder(BaseModel):
         encoder_model = get_encoder_model(opt.enc_model)
         discriminator_model = get_discriminator_model(opt.dsc_model)
 
-        segmentation_decoder = decoder_model(opt, 20, type='probabilities')
-
-        self.decoder_rgb_A = decoder_model(opt, 3, type='continous')
-        self.decoder_rgb_B = decoder_model(opt, 3, type='continous')
-        self.decoder_seg = segmentation_decoder
         self.encoder_A = encoder_model(opt)
         self.encoder_B = encoder_model(opt)
+
+        latent_size = self.encoder_A.get_output_channels()
+
+
+        segmentation_decoder = decoder_model(latent_size, 20, opt, type='probabilities')
+        self.decoder_rgb_A = decoder_model(latent_size, 3, opt, type='continous')
+        self.decoder_rgb_B = decoder_model(latent_size, 3, opt, type='continous')
+        self.decoder_seg = segmentation_decoder
+
         self.networks = self.networks + [self.decoder_rgb_A, self.decoder_rgb_B, self.decoder_seg,
                                          self.encoder_A, self.encoder_B]
 
