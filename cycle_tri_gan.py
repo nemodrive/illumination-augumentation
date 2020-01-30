@@ -212,7 +212,7 @@ class CycleTriGAN(BaseModel):
         self.loss_decoder_rgb_A = 0.
         self.loss_decoder_rgb_B = 0.
         self.pred_discriminator_B = self.discriminator_B(self.fake_B)
-        self.pred_discriminator_A = self.discriminator_A(self.fake_B)
+        self.pred_discriminator_A = self.discriminator_A(self.fake_A)
         for pred_A, pred_B in zip(self.pred_discriminator_A, self.pred_discriminator_B):
             self.loss_decoder_rgb_B += self.adversarial_objective(pred_B, True)
             self.loss_decoder_rgb_A += self.adversarial_objective(pred_A, True)

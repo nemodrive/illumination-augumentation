@@ -20,7 +20,7 @@ batch_size: 1
 lr_policy: linear
 lr: 0.0002
 beta_1: 0.5
-gen_max_gnorm: 700.
+gen_max_gnorm: 3700.
 dsc_max_gnorm: 400.
 
 dsc_model: BasePatchDiscriminator
