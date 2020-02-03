@@ -5,7 +5,7 @@ import torch
 from deeplabv3 import DeepLabV3
 from argparse import Namespace
 from basic_model import BaseModel
-from dataset import UnpairedDataset
+from dataset import UnpairedDataset, SegmentationUnpairedDataset
 from visualizer import CycleTriGanSummary
 import shutil
 
@@ -39,7 +39,7 @@ if __name__ == '__main__':
         opt = yaml.load(cfg_file)
         opt = Namespace(**opt)
     model = create_model(opt, segment_network)
-    dataset = UnpairedDataset(opt.root_path, opt.load_size)
+    dataset = SegmentationUnpairedDataset(opt.root_path, opt.load_size, opt.seg_size)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch_size, num_workers=8)
     model.setup(opt)
 

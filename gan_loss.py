@@ -13,7 +13,7 @@ class AdversarialObjective(nn.Module):
         self.mode = mode
 
         if mode == 'bce':
-            self.loss = nn.BCEWithLogitsLoss()
+            self.loss = nn.BCELoss()
         elif mode == 'mse':
             self.loss = nn.MSELoss()
 

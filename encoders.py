@@ -60,6 +60,7 @@ class BaseDilationEncoder(nn.Module):
         self.enc_channels = opt.enc_channels
         self.num_downsamples = opt.num_downsamples
         self.dilations = opt.enc_dilations
+        self.num_dilations = len(self.dilations)
         self.dil_channels = opt.dil_channels
         self.padding_layer = get_padding(opt.enc_padding)
         self.activ_layer = get_activ(opt.enc_activ)
@@ -83,23 +84,33 @@ class BaseDilationEncoder(nn.Module):
         prev_factor = 1
         for i in range(self.num_downsamples):
             factor = factor * 2
-            self._layers = self._layers + [MultiDilatedConv(in_channels=self.enc_channels * prev_factor,
-                                                            out_channels=self.enc_channels * prev_factor,
-                                                            dil_channels=self.dil_channels * prev_factor,
-                                                            dilations=self.dilations,
-                                                            dropout=self.p_dropout,
-                                                            activ=opt.enc_activ,
-                                                            norm=opt.enc_norm,
-                                                            padding=opt.enc_padding,
-                                                            residual=False)]
-
-            self._layers = self._layers + [DownSampleConv(in_channels=self.enc_channels * prev_factor,
-                                                          out_channels=self.enc_channels * factor,
-                                                          dropout=self.p_dropout,
-                                                          activ=opt.enc_activ,
-                                                          norm=opt.enc_norm,
-                                                          padding=opt.enc_padding
-                                                          )]
+            '''
+            self._layers = self._layers + [SquashMultiDilatedConv(in_channels=self.enc_channels * prev_factor,
+                                                                  out_channels=self.enc_channels * prev_factor,
+                                                                  dil_channels=self.dil_channels * prev_factor,
+                                                                  dilations=self.dilations,
+                                                                  dropout=self.p_dropout,
+                                                                  activ=opt.enc_activ,
+                                                                  norm=opt.enc_norm,
+                                                                  padding=opt.enc_padding,
+                                                                  residual=False)]
+            '''
+            self._layers = self._layers + [
+                MultiDilatedConv(in_channels=self.enc_channels * prev_factor,
+                                 dil_channels=self.dil_channels * prev_factor,
+                                 dilations=self.dilations,
+                                 dropout=self.p_dropout,
+                                 activ=opt.enc_activ,
+                                 padding=opt.enc_padding,
+                                 )]
+            self._layers = self._layers + [
+                DownSampleConv(in_channels=self.dil_channels * self.num_dilations * prev_factor,
+                               out_channels=self.enc_channels * factor,
+                               dropout=self.p_dropout,
+                               activ=opt.enc_activ,
+                               norm=opt.enc_norm,
+                               padding=opt.enc_padding
+                               )]
             prev_factor = factor
 
         self.output_size = self.enc_channels * factor
@@ -151,15 +162,15 @@ class AggregatedLargeDilationEncoder(nn.Module):
         for i in range(self.num_downsamples):
             factor = factor * 2
             # dilating before downsampling
-            self._layers = self._layers + [MultiDilatedConv(in_channels=self.enc_channels * prev_factor,
-                                                            out_channels=self.enc_channels * prev_factor,
-                                                            dil_channels=self.dil_channels * prev_factor,
-                                                            dilations=self.dilations[:-self.num_downsamples],
-                                                            dropout=self.p_dropout,
-                                                            activ=opt.enc_activ,
-                                                            norm=opt.enc_norm,
-                                                            padding=opt.enc_padding,
-                                                            residual=False)]
+            self._layers = self._layers + [SquashMultiDilatedConv(in_channels=self.enc_channels * prev_factor,
+                                                                  out_channels=self.enc_channels * prev_factor,
+                                                                  dil_channels=self.dil_channels * prev_factor,
+                                                                  dilations=self.dilations[:-self.num_downsamples],
+                                                                  dropout=self.p_dropout,
+                                                                  activ=opt.enc_activ,
+                                                                  norm=opt.enc_norm,
+                                                                  padding=opt.enc_padding,
+                                                                  residual=False)]
 
             self._layers = self._layers + [DownSampleConv(in_channels=self.enc_channels * prev_factor,
                                                           out_channels=self.enc_channels * factor,
@@ -172,15 +183,15 @@ class AggregatedLargeDilationEncoder(nn.Module):
 
         # increase dropout factor due to increased number of dilations used
         # using residual connections. why? no reason
-        self._layers = self._layers + [MultiDilatedConv(in_channels=self.enc_channels * factor,
-                                                        out_channels=self.enc_channels * factor,
-                                                        dil_channels=self.dil_channels * factor,
-                                                        dilations=self.dilations,
-                                                        dropout=self.p_dropout * 2,
-                                                        activ=opt.enc_activ,
-                                                        norm=opt.enc_norm,
-                                                        padding=opt.enc_padding,
-                                                        residual=True)]
+        self._layers = self._layers + [SquashMultiDilatedConv(in_channels=self.enc_channels * factor,
+                                                              out_channels=self.enc_channels * factor,
+                                                              dil_channels=self.dil_channels * factor,
+                                                              dilations=self.dilations,
+                                                              dropout=self.p_dropout * 2,
+                                                              activ=opt.enc_activ,
+                                                              norm=opt.enc_norm,
+                                                              padding=opt.enc_padding,
+                                                              residual=True)]
         self._layers = nn.ModuleList(self._layers)
         self.output_size = self.enc_channels * factor
 

@@ -78,6 +78,7 @@ class BaseDilationDecoder(nn.Module):
         self.dil_channels = opt.dil_channels
         self.num_upsamples = opt.num_downsamples
         self.dilations = opt.dec_dilations
+        self.num_dilations = len(self.dilations)
         # these are layer constructors, not implicit layers
         self.norm_layer = get_norm(opt.dec_norm)
         self.activ_layer = get_activ(opt.dec_activ)
@@ -95,40 +96,60 @@ class BaseDilationDecoder(nn.Module):
         factor = 2 ** self.num_upsamples
         prev_factor = factor
 
-        self._layers = self._layers + [MultiDilatedConv(in_channels=self.dec_channels * factor,
-                                                        out_channels=self.dec_channels * factor,
-                                                        dil_channels=self.dil_channels * factor,
+        '''
+        self._layers = self._layers + [SquashMultiDilatedConv(in_channels=self.dec_channels * factor,
+                                                              out_channels=self.dec_channels * factor,
+                                                              dil_channels=self.dil_channels * factor,
+                                                              dilations=self.dilations,
+                                                              dropout=self.p_dropout,
+                                                              activ=opt.dec_activ,
+                                                              norm=opt.dec_norm,
+                                                              padding=opt.dec_padding,
+                                                              residual=False)]
+        '''
+        print(self.enc_channels * prev_factor)
+        self._layers = self._layers + [MultiDilatedConv(in_channels=self.enc_channels * prev_factor,
+                                                        dil_channels=self.dil_channels * prev_factor,
                                                         dilations=self.dilations,
                                                         dropout=self.p_dropout,
-                                                        activ=opt.dec_activ,
-                                                        norm=opt.dec_norm,
-                                                        padding=opt.dec_padding,
-                                                        residual=False)]
+                                                        activ=opt.enc_activ,
+                                                        padding=opt.enc_padding,
+                                                        )]
 
         for i in range(self.num_upsamples):
             factor = int(factor / 2)
-            self._layers = self._layers + [UpSampleConv(in_channels=self.dec_channels * prev_factor,
-                                                        out_channels=self.dec_channels * factor,
-                                                        dropout=self.p_dropout,
-                                                        activ=opt.dec_activ,
-                                                        norm=opt.dec_norm,
-                                                        padding='zeros'
-                                                        )]
+            self._layers = self._layers + [
+                UpSampleConv(in_channels=self.dil_channels * self.num_dilations * prev_factor,
+                             out_channels=self.dec_channels * factor,
+                             dropout=self.p_dropout,
+                             activ=opt.dec_activ,
+                             norm=opt.dec_norm,
+                             padding='zeros'
+                             )]
+            '''
+            self._layers = self._layers + [SquashMultiDilatedConv(in_channels=self.dec_channels * factor,
+                                                                  out_channels=self.dec_channels * factor,
+                                                                  dil_channels=self.dil_channels * factor,
+                                                                  dilations=self.dilations,
+                                                                  dropout=self.p_dropout,
+                                                                  activ=opt.dec_activ,
+                                                                  norm=opt.dec_norm,
+                                                                  padding=opt.dec_padding,
+                                                                  residual=False)]
+            '''
             self._layers = self._layers + [MultiDilatedConv(in_channels=self.dec_channels * factor,
-                                                            out_channels=self.dec_channels * factor,
                                                             dil_channels=self.dil_channels * factor,
                                                             dilations=self.dilations,
                                                             dropout=self.p_dropout,
-                                                            activ=opt.dec_activ,
-                                                            norm=opt.dec_norm,
-                                                            padding=opt.dec_padding,
-                                                            residual=False)]
+                                                            activ=opt.enc_activ,
+                                                            padding=opt.enc_padding,
+                                                            )]
             prev_factor = factor
 
         self._final_layer = [
             self.padding_layer(3),
             nn.Conv2d(
-                in_channels=self.dec_channels * factor,
+                in_channels=self.dil_channels * self.num_dilations * factor,
                 out_channels=self.out_channels,
                 kernel_size=7,
                 padding=0,
@@ -176,15 +197,15 @@ class AggregatedLargeDilationDecoder(nn.Module):
         factor = 2 ** self.num_upsamples
         prev_factor = factor
 
-        self._layers = self._layers + [MultiDilatedConv(in_channels=self.dec_channels * factor,
-                                                        out_channels=self.dec_channels * factor,
-                                                        dil_channels=self.dil_channels * factor,
-                                                        dilations=self.dilations,
-                                                        dropout=self.p_dropout * 2,
-                                                        activ=opt.dec_activ,
-                                                        norm=opt.dec_norm,
-                                                        padding=opt.dec_padding,
-                                                        residual=False)]
+        self._layers = self._layers + [SquashMultiDilatedConv(in_channels=self.dec_channels * factor,
+                                                              out_channels=self.dec_channels * factor,
+                                                              dil_channels=self.dil_channels * factor,
+                                                              dilations=self.dilations,
+                                                              dropout=self.p_dropout * 2,
+                                                              activ=opt.dec_activ,
+                                                              norm=opt.dec_norm,
+                                                              padding=opt.dec_padding,
+                                                              residual=False)]
 
         for i in range(self.num_upsamples):
             factor = int(factor / 2)
@@ -196,17 +217,16 @@ class AggregatedLargeDilationDecoder(nn.Module):
                                                         padding='zeros'
                                                         )]
 
-            self._layers = self._layers + [MultiDilatedConv(in_channels=self.dec_channels * factor,
-                                                            out_channels=self.dec_channels * factor,
-                                                            dil_channels=self.dil_channels * factor,
-                                                            dilations=self.dilations[:-self.num_upsamples],
-                                                            dropout=self.p_dropout,
-                                                            activ=opt.dec_activ,
-                                                            norm=opt.dec_norm,
-                                                            padding=opt.dec_padding,
-                                                            residual=False)]
+            self._layers = self._layers + [SquashMultiDilatedConv(in_channels=self.dec_channels * factor,
+                                                                  out_channels=self.dec_channels * factor,
+                                                                  dil_channels=self.dil_channels * factor,
+                                                                  dilations=self.dilations[:-self.num_upsamples],
+                                                                  dropout=self.p_dropout,
+                                                                  activ=opt.dec_activ,
+                                                                  norm=opt.dec_norm,
+                                                                  padding=opt.dec_padding,
+                                                                  residual=False)]
             prev_factor = factor
-
 
         print(self.activ_final)
         self._final_layer = [
@@ -228,7 +248,7 @@ class AggregatedLargeDilationDecoder(nn.Module):
         for layer in self._layers:
             x = layer(x)
         return x
-        #return self._layers(x)
+        # return self._layers(x)
 
 
 class ResidualsIntoDilationDecoder(nn.Module):

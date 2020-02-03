@@ -140,9 +140,12 @@ class CycleTriGAN(BaseModel):
         for i in range(len(self.networks)):
             self.networks[i] = init_model(self.networks[i], opt.init_type, opt.init_gain, opt.bias, self.gpu_ids)
 
-        self.adversarial_objective = AdversarialObjective(mode=opt.adversarial_objective,
-                                                          target_real_label=opt.target_real_label,
-                                                          target_fake_label=opt.target_fake_label).to(self.device)
+        self.generative_objective = AdversarialObjective(mode=opt.adversarial_objective,
+                                                         target_real_label=1.0,
+                                                         target_fake_label=0.0).to(self.device)
+        self.discriminative_objective = AdversarialObjective(mode=opt.adversarial_objective,
+                                                             target_real_label=0.9,
+                                                             target_fake_label=0.0, ).to(self.device)
         self.cycle_objective = ReconstructionObjective(opt.reconstruction_objective).to(self.device)
         self.identity_objective = ReconstructionObjective(opt.reconstruction_objective).to(self.device)
         self.aux_objective = nn.BCELoss().to(self.device)
@@ -177,8 +180,17 @@ class CycleTriGAN(BaseModel):
     def set_input(self, input):
         self.real_A = input['rgb_A'].to(self.device)
         self.real_B = input['rgb_B'].to(self.device)
-        self.gt_seg_A = self.segmentation_model(self.real_A).detach()
-        self.gt_seg_B = self.segmentation_model(self.real_B).detach()
+        self.gt_seg_A = input['seg_A'].to(self.device)
+        self.gt_seg_B = input['seg_B'].to(self.device)
+
+        self.gt_seg_A = self.segmentation_model(self.gt_seg_A).detach()
+        self.gt_seg_B = self.segmentation_model(self.gt_seg_B).detach()
+
+        self.gt_seg_A = F.upsample(self.gt_seg_A, self.opt.load_size)
+        self.gt_seg_B = F.upsample(self.gt_seg_B, self.opt.load_size)
+
+        self.gt_seg_A = F.sigmoid(self.gt_seg_A)
+        self.gt_seg_B = F.sigmoid(self.gt_seg_B)
 
     def forward(self):
         # fake image generation
@@ -220,9 +232,10 @@ class CycleTriGAN(BaseModel):
         loss_real = 0.
         loss_fake = 0.
         for (pr, pf) in zip(pred_real, pred_fake):
-            loss_real += self.adversarial_objective(pr, True)
-            loss_fake += self.adversarial_objective(pf, False)
+            loss_real += self.discriminative_objective(pr, True)
+            loss_fake += self.discriminative_objective(pf, False)
         loss_D = (loss_real + loss_fake) * 0.5
+        loss_D = loss_D / len(pred_real)
         loss_D.backward()
         return loss_D
 
@@ -247,11 +260,13 @@ class CycleTriGAN(BaseModel):
             self.loss_identity_B = 0.
         self.loss_decoder_rgb_A = 0.
         self.loss_decoder_rgb_B = 0.
+        self.pred_discriminator_A = self.discriminator_A(self.fake_A)
         self.pred_discriminator_B = self.discriminator_B(self.fake_B)
-        self.pred_discriminator_A = self.discriminator_A(self.fake_B)
         for pred_A, pred_B in zip(self.pred_discriminator_A, self.pred_discriminator_B):
-            self.loss_decoder_rgb_B += self.adversarial_objective(pred_B, True)
-            self.loss_decoder_rgb_A += self.adversarial_objective(pred_A, True)
+            self.loss_decoder_rgb_A += self.generative_objective(pred_A, True)
+            self.loss_decoder_rgb_B += self.generative_objective(pred_B, True)
+        self.loss_decoder_rgb_A = self.loss_decoder_rgb_A / len(self.opt.dsc_scales)
+        self.loss_decoder_rgb_B = self.loss_decoder_rgb_B / len(self.opt.dsc_scales)
         self.loss_cycle_A = self.cycle_objective(self.rec_A, self.real_A) * self.lambda_A
         self.loss_cycle_B = self.cycle_objective(self.rec_B, self.real_B) * self.lambda_B
         self.loss_decoder_seg_A = self.aux_objective(self.seg_A, self.gt_seg_A) * self.lambda_aux

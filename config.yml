@@ -13,6 +13,7 @@ gpu_ids:
   - 0
 
 load_size: 256
+seg_size: 512
 epoch_count: 50
 batch_size: 1
 
@@ -27,8 +28,8 @@ dsc_model: BasePatchDiscriminator
 dsc_layers: 3
 dsc_channels: 64
 dsc_scales:
-  - 20
   - 16
+  - 20
   - 24
   - 32
 dsc_dropout: 0.1
@@ -75,13 +76,13 @@ dec_dilations:
 lambda_A: 50
 lambda_B: 50
 lambda_idn: 20
-lambda_aux: 7
-lambda_aux_A: 30
-lambda_aux_B: 10
+lambda_aux: 1
+lambda_aux_A: 3
+lambda_aux_B: 1
 adversarial_objective: mse
 reconstruction_objective: L2
 target_real_label: 0.9
-target_fake_label: 0.1
+target_fake_label: 0.0
 pool_max_size: 30
 pool_add_prob: 0.7
 
