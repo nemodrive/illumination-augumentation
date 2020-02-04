@@ -1,7 +1,7 @@
 root_path: day-night-simple
 checkpoints_dir: checkpoints
-name: cycle_tri_gan_shared_segmentation_decoder_fixed
-model: cycle_tri_gan_shared_segmentation_decoder
+name: shared_cycle_tri_gan_fixed
+model: shared_cycle_tri_gan
 trainable: True
 continue_train: False
 verbose: False
@@ -11,6 +11,7 @@ save_epoch_freq: 1
 load_iter: 1000
 gpu_ids:
   - 0
+  - 1
 
 load_size: 256
 seg_size: 512
@@ -25,13 +26,13 @@ gen_max_gnorm: 3700.
 dsc_max_gnorm: 400.
 
 dsc_model: BasePatchDiscriminator
-dsc_layers: 3
+dsc_layers: 4
 dsc_channels: 64
 dsc_scales:
-  - 16
-  - 20
-  - 24
-  - 32
+  - 1
+  - 2
+  - 4
+  - 8
 dsc_dropout: 0.1
 dsc_activ: gelu
 dsc_norm: instance
@@ -41,8 +42,8 @@ dsc_padding: reflection
 num_downsamples: 2
 dil_channels: 64
 
-latent_blocks: 1
-latent_layers: 2
+latent_blocks: 2
+latent_layers: 3
 
 latent_channels: 64
 latent_dropout: 0.1
@@ -50,7 +51,11 @@ latent_activ: gelu
 latent_norm: instance
 latent_padding: reflection
 
-enc_model: DilationIntoResidualsEncoder
+s_enc_model: ScalingResidualEncoder
+s_dec_model: ScalingResidualEncoder
+seg_dec_model: ResidualsIntoDilationDecoder
+
+enc_model: BaseDilationEncoder
 enc_channels: 64
 enc_dropout: 0.1
 enc_activ: gelu
@@ -62,7 +67,7 @@ enc_dilations:
   - 3
 
 
-dec_model: ResidualsIntoDilationDecoder
+dec_model: BaseDilationDecoder
 dec_channels: 64
 dec_dropout: 0.1
 dec_activ: gelu

@@ -32,13 +32,14 @@ class BaseEncoder(nn.Module):
         prev_factor = 1
         for i in range(self.num_downsamples):
             factor = factor * 2
-            self._layers = self._layers + [DownSampleConv(in_channels=self.enc_channels * prev_factor,
-                                                          out_channels=self.enc_channels * factor,
-                                                          dropout=self.p_dropout,
-                                                          activ=opt.enc_activ,
-                                                          norm=opt.enc_norm,
-                                                          padding=opt.enc_padding
-                                                          )]
+            self._layers = self._layers + [
+                DownSampleConv(in_channels=self.enc_channels * prev_factor,
+                               out_channels=self.enc_channels * factor,
+                               dropout=self.p_dropout,
+                               activ=opt.enc_activ,
+                               norm=opt.enc_norm,
+                               padding=opt.enc_padding
+                               )]
             prev_factor = factor
 
         self.output_size = self.enc_channels * factor
@@ -162,41 +163,72 @@ class AggregatedLargeDilationEncoder(nn.Module):
         for i in range(self.num_downsamples):
             factor = factor * 2
             # dilating before downsampling
-            self._layers = self._layers + [SquashMultiDilatedConv(in_channels=self.enc_channels * prev_factor,
-                                                                  out_channels=self.enc_channels * prev_factor,
-                                                                  dil_channels=self.dil_channels * prev_factor,
-                                                                  dilations=self.dilations[:-self.num_downsamples],
-                                                                  dropout=self.p_dropout,
-                                                                  activ=opt.enc_activ,
-                                                                  norm=opt.enc_norm,
-                                                                  padding=opt.enc_padding,
-                                                                  residual=False)]
+            self._layers = self._layers + [
+                SquashMultiDilatedConv(in_channels=self.enc_channels * prev_factor,
+                                       out_channels=self.enc_channels * prev_factor,
+                                       dil_channels=self.dil_channels * prev_factor,
+                                       dilations=self.dilations[:-self.num_downsamples],
+                                       dropout=self.p_dropout,
+                                       activ=opt.enc_activ,
+                                       norm=opt.enc_norm,
+                                       padding=opt.enc_padding,
+                                       residual=False)]
 
-            self._layers = self._layers + [DownSampleConv(in_channels=self.enc_channels * prev_factor,
-                                                          out_channels=self.enc_channels * factor,
-                                                          dropout=self.p_dropout,
-                                                          activ=opt.enc_activ,
-                                                          norm=opt.enc_norm,
-                                                          padding=opt.enc_padding
-                                                          )]
+            self._layers = self._layers + [
+                DownSampleConv(in_channels=self.enc_channels * prev_factor,
+                               out_channels=self.enc_channels * factor,
+                               dropout=self.p_dropout,
+                               activ=opt.enc_activ,
+                               norm=opt.enc_norm,
+                               padding=opt.enc_padding
+                               )]
             prev_factor = factor
 
         # increase dropout factor due to increased number of dilations used
         # using residual connections. why? no reason
-        self._layers = self._layers + [SquashMultiDilatedConv(in_channels=self.enc_channels * factor,
-                                                              out_channels=self.enc_channels * factor,
-                                                              dil_channels=self.dil_channels * factor,
-                                                              dilations=self.dilations,
-                                                              dropout=self.p_dropout * 2,
-                                                              activ=opt.enc_activ,
-                                                              norm=opt.enc_norm,
-                                                              padding=opt.enc_padding,
-                                                              residual=True)]
+        self._layers = self._layers + [
+            SquashMultiDilatedConv(in_channels=self.enc_channels * factor,
+                                   out_channels=self.enc_channels * factor,
+                                   dil_channels=self.dil_channels * factor,
+                                   dilations=self.dilations,
+                                   dropout=self.p_dropout * 2,
+                                   activ=opt.enc_activ,
+                                   norm=opt.enc_norm,
+                                   padding=opt.enc_padding,
+                                   residual=True)]
         self._layers = nn.ModuleList(self._layers)
         self.output_size = self.enc_channels * factor
 
     def forward(self, input):
         # x = self._layers(input)
+        x = input
+        for layer in self._layers:
+            x = layer(x)
+        return x
+
+    def get_output_channels(self):
+        return self.output_size
+
+
+class ScalingResidualEncoder(nn.Module):
+    def __init__(self, in_channels, out_channels, opt):
+        super(ScalingResidualEncoder, self).__init__()
+        self.opt = opt
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self._build_layers()
+
+    def _build_layers(self):
+        self._layers = []
+        residual_model = ScalingResidualBlock(in_channels=self.in_channels,
+                                              out_channels=self.out_channels,
+                                              num_blocks=self.opt.latent_blocks,
+                                              num_layers=self.opt.latent_layers,
+                                              opt=self.opt)
+        self._layers = self._layers + [residual_model]
+        self._layers = nn.ModuleList(self._layers)
+
+    def forward(self, input):
         x = input
         for layer in self._layers:
             x = layer(x)

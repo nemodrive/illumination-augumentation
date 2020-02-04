@@ -43,9 +43,9 @@ def get_discriminator_model(model_name):
     return model
 
 
-class CycleTriGAN(BaseModel):
+class SharedCycleTriGAN(BaseModel):
     def __init__(self, opt, segmentation_model):
-        super(CycleTriGAN, self).__init__(opt)
+        super(SharedCycleTriGAN, self).__init__(opt)
         self.loss_names = [
             'discriminator_A',
             'decoder_rgb_A',
@@ -62,12 +62,13 @@ class CycleTriGAN(BaseModel):
         self.gradient_norm_names = [
             'decoder_rgb_A',
             'decoder_rgb_B',
-            'decoder_seg_A',
-            'decoder_seg_B',
+            'decoder_seg',
+            'decoder_shared',
             'discriminator_A',
             'discriminator_B',
             'encoder_A',
-            'encoder_B'
+            'encoder_B',
+            'encoder_shared'
         ]
 
         self.opt = opt
@@ -84,29 +85,34 @@ class CycleTriGAN(BaseModel):
         if self.trainable:
             self.model_names = ['encoder_A',
                                 'encoder_B',
+                                'encoder_shared',
                                 'decoder_rgb_A',
                                 'decoder_rgb_B',
-                                'decoder_seg_A',
-                                'decoder_seg_B',
+                                'decoder_shared',
+                                'decoder_seg',
                                 'discriminator_A',
                                 'discriminator_B']
         else:
             self.model_names = ['encoder_A',
                                 'encoder_B',
+                                'encoder_shared',
                                 'decoder_rgb_A',
                                 'decoder_rgb_B',
-                                'decoder_seg_A',
-                                'decoder_seg_B']
+                                'decoder_shared',
+                                'decoder_seg',
+                                ]
 
         self.networks = []
         decoder_model = get_decoder_model(opt.dec_model)
         encoder_model = get_encoder_model(opt.enc_model)
+        seg_decoder_model = get_decoder_model(opt.seg_dec_model)
         discriminator_model = get_discriminator_model(opt.dsc_model)
 
         # currently modular code only allows for encoder and decoder
         # models that do not alter the 2D shape of the feature_blocks
         shared_encoder_model = get_encoder_model(opt.s_enc_model)
         shared_decoder_model = get_encoder_model(opt.s_dec_model)
+        print(shared_encoder_model)
 
         latent_space_size = (2 ** opt.num_downsamples) * opt.enc_channels
 
@@ -119,12 +125,16 @@ class CycleTriGAN(BaseModel):
 
         self.decoder_rgb_A = decoder_model(opt, 3, type='continous')
         self.decoder_rgb_B = decoder_model(opt, 3, type='continous')
-        self.decoder_seg = decoder_model(opt, 20, type='probabilities')
+        self.decoder_seg = seg_decoder_model(in_channels=latent_space_size * 2,
+                                             out_channels=20,
+                                             opt=opt,
+                                             type='probabilities')
 
         self.encoder_A = encoder_model(opt)
         self.encoder_B = encoder_model(opt)
         self.networks = self.networks + [self.decoder_rgb_A, self.decoder_rgb_B, self.decoder_seg,
-                                         self.encoder_A, self.encoder_B, self.encoder_shared, self.decoder_shared]
+                                         self.encoder_A, self.encoder_B, self.encoder_shared,
+                                         self.decoder_shared]
 
         # refference for gradient clipping
         self.generative_networks = self.networks
@@ -138,16 +148,19 @@ class CycleTriGAN(BaseModel):
             self.networks = self.networks + [self.discriminator_A, self.discriminator_B]
 
         for i in range(len(self.networks)):
-            self.networks[i] = init_model(self.networks[i], opt.init_type, opt.init_gain, opt.bias, self.gpu_ids)
+            self.networks[i] = init_model(self.networks[i], opt.init_type, opt.init_gain, opt.bias,
+                                          self.gpu_ids)
 
         self.generative_objective = AdversarialObjective(mode=opt.adversarial_objective,
                                                          target_real_label=1.0,
                                                          target_fake_label=0.0).to(self.device)
         self.discriminative_objective = AdversarialObjective(mode=opt.adversarial_objective,
                                                              target_real_label=0.9,
-                                                             target_fake_label=0.0, ).to(self.device)
+                                                             target_fake_label=0.0, ).to(
+            self.device)
         self.cycle_objective = ReconstructionObjective(opt.reconstruction_objective).to(self.device)
-        self.identity_objective = ReconstructionObjective(opt.reconstruction_objective).to(self.device)
+        self.identity_objective = ReconstructionObjective(opt.reconstruction_objective).to(
+            self.device)
         self.aux_objective = nn.BCELoss().to(self.device)
 
         self.optimizer_generator = torch.optim.Adam(
@@ -287,13 +300,18 @@ class CycleTriGAN(BaseModel):
         #    gnorm_network = clip_grad_norm_(network.parameters(), self.opt.gen_max_gnorm)
 
         # needs to be refactored
-        self.gnorm_decoder_rgb_A = clip_grad_norm_(self.decoder_rgb_A.parameters(), self.opt.gen_max_gnorm)
-        self.gnorm_decoder_rgb_B = clip_grad_norm_(self.decoder_rgb_B.parameters(), self.opt.gen_max_gnorm)
-        self.gnorm_decoder_seg = clip_grad_norm_(self.decoder_seg.parameters(), self.opt.gen_max_gnorm)
-        self.gnorm_decoder_shared = clip_grad_norm_(self.decoder_shared.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_decoder_rgb_A = clip_grad_norm_(self.decoder_rgb_A.parameters(),
+                                                   self.opt.gen_max_gnorm)
+        self.gnorm_decoder_rgb_B = clip_grad_norm_(self.decoder_rgb_B.parameters(),
+                                                   self.opt.gen_max_gnorm)
+        self.gnorm_decoder_seg = clip_grad_norm_(self.decoder_seg.parameters(),
+                                                 self.opt.gen_max_gnorm)
+        self.gnorm_decoder_shared = clip_grad_norm_(self.decoder_shared.parameters(),
+                                                    self.opt.gen_max_gnorm)
         self.gnorm_encoder_A = clip_grad_norm_(self.encoder_A.parameters(), self.opt.gen_max_gnorm)
         self.gnorm_encoder_B = clip_grad_norm_(self.encoder_B.parameters(), self.opt.gen_max_gnorm)
-        self.gnorm_encoder_shared = clip_grad_norm_(self.encoder_shared.parameters(), self.opt.gen_max_gnorm)
+        self.gnorm_encoder_shared = clip_grad_norm_(self.encoder_shared.parameters(),
+                                                    self.opt.gen_max_gnorm)
 
         self.optimizer_generator.step()
 
@@ -303,6 +321,8 @@ class CycleTriGAN(BaseModel):
         self.backward_discriminator_B()
 
         # needs to be refactored
-        self.gnorm_discriminator_A = clip_grad_norm_(self.discriminator_A.parameters(), self.opt.dsc_max_gnorm)
-        self.gnorm_discriminator_B = clip_grad_norm_(self.discriminator_B.parameters(), self.opt.dsc_max_gnorm)
+        self.gnorm_discriminator_A = clip_grad_norm_(self.discriminator_A.parameters(),
+                                                     self.opt.dsc_max_gnorm)
+        self.gnorm_discriminator_B = clip_grad_norm_(self.discriminator_B.parameters(),
+                                                     self.opt.dsc_max_gnorm)
         self.optimizer_discriminator.step()

@@ -9,10 +9,7 @@ from dataset import UnpairedDataset, SegmentationUnpairedDataset
 from visualizer import CycleTriGanSummary
 import shutil
 
-segment_network = DeepLabV3("eval_val",
-                            project_dir="drive_augumentation").cuda()
-segment_network.load_state_dict(torch.load("pretrained_models/model_13_2_2_2_epoch_580.pth"))
-segment_network.eval()
+
 
 
 def get_model(model_name):
@@ -23,7 +20,7 @@ def get_model(model_name):
     for name, cls in model_lib.__dict__.items():
         if name.lower() == model_class.lower() and issubclass(cls, BaseModel):
             model = cls
-
+    print(model)
     return model
 
 
@@ -38,6 +35,11 @@ if __name__ == '__main__':
     with open('config.yml', 'r') as cfg_file:
         opt = yaml.load(cfg_file)
         opt = Namespace(**opt)
+    segment_network = DeepLabV3("eval_val", project_dir="drive_augumentation")
+    segment_network.load_state_dict(torch.load("pretrained_models/model_13_2_2_2_epoch_580.pth"))
+    segment_network.eval()
+    if len(opt.gpu_ids) > 0:
+        segment_network = segment_network.to('cuda:1')
     model = create_model(opt, segment_network)
     dataset = SegmentationUnpairedDataset(opt.root_path, opt.load_size, opt.seg_size)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch_size, num_workers=8)
