@@ -220,9 +220,9 @@ class CycleTriGANSharedSegmentationDecoder(BaseModel):
             self.identity_A = self.decoder_rgb_A(self.encoder_A(self.real_A))
             self.identity_B = self.decoder_rgb_B(self.encoder_B(self.real_B))
             self.loss_identity_A = self.identity_objective(self.identity_A,
-                                                           self.real_A) * self.lambda_A * self.lambda_idn
+                                                           self.real_A) * self.lambda_idn
             self.loss_identity_B = self.identity_objective(self.identity_B,
-                                                           self.real_B) * self.lambda_B * self.lambda_idn
+                                                           self.real_B) * self.lambda_idn
         else:
             self.loss_identity_A = 0.
             self.loss_identity_B = 0.

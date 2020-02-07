@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-USE_PYTORCH_IN = False
+USE_PYTORCH_IN = True
 
 class IdentityNorm(nn.Module):
     def __init__(self):

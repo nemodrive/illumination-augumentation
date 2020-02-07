@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <module type="PYTHON_MODULE" version="4">
   <component name="NewModuleRootManager">
-    <content url="file://$MODULE_DIR$" />
-    <orderEntry type="jdk" jdkName="Python 3.7 (nemo-ponk) (2)" jdkType="Python SDK" />
+    <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/day-night-simple" />
+      <excludeFolder url="file://$MODULE_DIR$/drive_augumentation" />
+      <excludeFolder url="file://$MODULE_DIR$/pretrained_models" />
+      <excludeFolder url="file://$MODULE_DIR$/runs" />
+    </content>
+    <orderEntry type="jdk" jdkName="Python 3.7 (nemo-ponk)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

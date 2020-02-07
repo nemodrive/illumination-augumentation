@@ -1,7 +1,7 @@
 root_path: day-night-simple
 checkpoints_dir: checkpoints
-name: shared_cycle_tri_gan_fixed
-model: shared_cycle_tri_gan
+name: cycle_tri_gan_shared_segmentation_decoder_v4
+model: cycle_tri_gan_shared_segmentation_decoder
 trainable: True
 continue_train: False
 verbose: False
@@ -10,13 +10,12 @@ display_freq: 10
 save_epoch_freq: 1
 load_iter: 1000
 gpu_ids:
-  - 0
-  - 1
+  - 3
 
 load_size: 256
 seg_size: 512
 epoch_count: 50
-batch_size: 1
+batch_size: 2
 
 
 lr_policy: linear
@@ -33,6 +32,7 @@ dsc_scales:
   - 2
   - 4
   - 8
+  - 16
 dsc_dropout: 0.1
 dsc_activ: gelu
 dsc_norm: instance
@@ -42,7 +42,7 @@ dsc_padding: reflection
 num_downsamples: 2
 dil_channels: 64
 
-latent_blocks: 2
+latent_blocks: 4
 latent_layers: 3
 
 latent_channels: 64
@@ -55,7 +55,7 @@ s_enc_model: ScalingResidualEncoder
 s_dec_model: ScalingResidualEncoder
 seg_dec_model: ResidualsIntoDilationDecoder
 
-enc_model: BaseDilationEncoder
+enc_model: DilationIntoResidualsEncoder
 enc_channels: 64
 enc_dropout: 0.1
 enc_activ: gelu
@@ -67,7 +67,7 @@ enc_dilations:
   - 3
 
 
-dec_model: BaseDilationDecoder
+dec_model: ResidualsIntoDilationDecoder
 dec_channels: 64
 dec_dropout: 0.1
 dec_activ: gelu
